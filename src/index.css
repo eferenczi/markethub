@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+body { margin: 0; }
+
+/* Native apps: pad for the status bar / home indicator (notches, etc.). */
+body.native { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }

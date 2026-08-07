@@ -1,0 +1,15 @@
+{
+  "appId": "com.markethub.app",
+  "appName": "MarketHub",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 800,
+      "backgroundColor": "#234C3A",
+      "showSpinner": false
+    }
+  }
+}

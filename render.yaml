@@ -1,0 +1,30 @@
+# One-click-ish deploy on Render. Push this repo to GitHub, then in Render:
+# New +  ->  Blueprint  ->  pick this repo. It reads this file.
+services:
+  - type: web
+    name: markethub-api
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run migrate
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_ENCRYPTION_KEY
+        generateValue: true
+      - key: DB_CLIENT
+        value: better-sqlite3
+      - key: DB_FILE
+        value: /var/data/markethub.sqlite3
+      - key: CORS_ORIGINS
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+# NOTE: The free plan sleeps when idle. For real use, upgrade the plan and switch
+# DB_CLIENT to "pg" with a Render/Supabase/Neon Postgres DATABASE_URL instead of the disk.
