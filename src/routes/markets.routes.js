@@ -5,6 +5,7 @@ const { asyncHandler, ApiError } = require("../middleware/error");
 const { validate } = require("../middleware/validate");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireActiveSubscription } = require("../middleware/subscription");
+const { insertId } = require("../utils/insert-id");
 
 const router = express.Router();
 router.use(requireAuth, requireActiveSubscription);
@@ -35,8 +36,7 @@ router.post(
   canWrite,
   validate(marketSchema),
   asyncHandler(async (req, res) => {
-    const [idRaw] = await db("markets").insert({ ...req.body, org_id: req.user.org_id });
-    const id = typeof idRaw === "object" ? idRaw.id : idRaw;
+    const id = await insertId(db, "markets", { ...req.body, org_id: req.user.org_id });
     const market = await db("markets").where({ id }).first();
     res.status(201).json({ market });
   })

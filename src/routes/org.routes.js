@@ -7,6 +7,7 @@ const { validate } = require("../middleware/validate");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { makeResetToken } = require("../utils/auth");
 const { sendMail } = require("../services/mailer");
+const { insertId } = require("../utils/insert-id");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -39,8 +40,7 @@ router.post(
     const existing = await db("users").whereRaw("lower(email) = ?", [email.toLowerCase()]).first();
     if (existing) throw new ApiError(409, "A user with that email already exists");
 
-    const [idRaw] = await db("users").insert({ org_id: req.user.org_id, name, email, role, password_hash: null, active: false });
-    const id = typeof idRaw === "object" ? idRaw.id : idRaw;
+    const id = await insertId(db, "users", { org_id: req.user.org_id, name, email, role, password_hash: null, active: false });
 
     const { token, hash } = makeResetToken();
     const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days

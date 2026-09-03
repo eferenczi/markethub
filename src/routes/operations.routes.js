@@ -5,6 +5,7 @@ const { asyncHandler, ApiError } = require("../middleware/error");
 const { validate } = require("../middleware/validate");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireActiveSubscription } = require("../middleware/subscription");
+const { insertId } = require("../utils/insert-id");
 
 const router = express.Router();
 router.use(requireAuth, requireActiveSubscription);
@@ -13,7 +14,6 @@ const canWrite = requireRole("owner", "manager", "staff");
 const DATE_STATUS = ["published", "tentative", "skipped"];
 const APPROVAL_STATUS = ["pending", "awaiting_payment", "held", "paid", "released"];
 
-const id = (value) => (typeof value === "object" ? value.id : value);
 const optionalId = (value) => (value === undefined ? undefined : Number(value));
 
 async function marketForOrg(orgId, marketId) {
@@ -74,8 +74,8 @@ router.post(
     await marketForOrg(req.user.org_id, req.body.market_id);
     const existing = await db("market_dates").where({ market_id: req.body.market_id, event_date: req.body.event_date }).first();
     if (existing) throw new ApiError(409, "That market date already exists");
-    const raw = await db("market_dates").insert({ ...req.body, org_id: req.user.org_id });
-    const market_date = await db("market_dates").where({ id: id(raw[0]) }).first();
+    const id = await insertId(db, "market_dates", { ...req.body, org_id: req.user.org_id });
+    const market_date = await db("market_dates").where({ id }).first();
     res.status(201).json({ market_date });
   })
 );
@@ -170,8 +170,8 @@ router.post(
       : req.body.fee_cents;
     const existing = await db("approvals").where({ vendor_id: vendor.id, market_date_id: market_date.id }).first();
     if (existing) throw new ApiError(409, "This vendor already has an approval for that market date");
-    const raw = await db("approvals").insert({ org_id: req.user.org_id, vendor_id: vendor.id, market_id: market.id, market_date_id: market_date.id, booth_type, fee_cents, notes: req.body.notes });
-    res.status(201).json({ approval: approvalSummary(await db("approvals").where({ id: id(raw[0]) }).first()) });
+    const id = await insertId(db, "approvals", { org_id: req.user.org_id, vendor_id: vendor.id, market_id: market.id, market_date_id: market_date.id, booth_type, fee_cents, notes: req.body.notes });
+    res.status(201).json({ approval: approvalSummary(await db("approvals").where({ id }).first()) });
   })
 );
 
@@ -248,8 +248,7 @@ router.post(
     if (duplicate) throw new ApiError(409, "A layout with that name already exists for this date");
     for (const spot of req.body.spots) if (spot.vendor_id) await vendorForOrg(req.user.org_id, spot.vendor_id);
     const layout = await db.transaction(async (trx) => {
-      const raw = await trx("booth_layouts").insert({ org_id: req.user.org_id, market_id: market_date.market_id, market_date_id: market_date.id, name: req.body.name, venue_image: req.body.venue_image || null });
-      const layoutId = id(raw[0]);
+      const layoutId = await insertId(trx, "booth_layouts", { org_id: req.user.org_id, market_id: market_date.market_id, market_date_id: market_date.id, name: req.body.name, venue_image: req.body.venue_image || null });
       if (req.body.spots.length) await trx("booth_spots").insert(req.body.spots.map((spot) => ({ ...spot, layout_id: layoutId })));
       return trx("booth_layouts").where({ id: layoutId }).first();
     });

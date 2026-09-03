@@ -14,6 +14,7 @@ const {
 } = require("../utils/auth");
 const { sendMail } = require("../services/mailer");
 const billing = require("../services/billing");
+const { insertId } = require("../utils/insert-id");
 
 const router = express.Router();
 
@@ -37,11 +38,9 @@ router.post(
     const existing = await db("users").whereRaw("lower(email) = ?", [email.toLowerCase()]).first();
     if (existing) throw new ApiError(409, "An account with that email already exists");
 
-    const [orgIdRaw] = await db("organizations").insert({ name: orgName, ...billing.trialFields() });
-    const org_id = typeof orgIdRaw === "object" ? orgIdRaw.id : orgIdRaw;
+    const org_id = await insertId(db, "organizations", { name: orgName, ...billing.trialFields() });
     const password_hash = await hashPassword(password);
-    const [userIdRaw] = await db("users").insert({ org_id, email, name, role: "owner", password_hash });
-    const id = typeof userIdRaw === "object" ? userIdRaw.id : userIdRaw;
+    const id = await insertId(db, "users", { org_id, email, name, role: "owner", password_hash });
 
     const user = await db("users").where({ id }).first();
     const token = signToken({ sub: user.id });
