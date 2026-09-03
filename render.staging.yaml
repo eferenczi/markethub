@@ -1,4 +1,4 @@
-# Build revision: optional SQLite dependency excluded from required cloud installs.
+# Rebuild trigger: staging migrations use the PostgreSQL profile.
 # Private beta Blueprint. Keeps live email and payment integrations disabled
 # while running the same React + Express application against an isolated DB.
 services:
