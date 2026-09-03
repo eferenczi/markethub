@@ -65,6 +65,12 @@ test("health check responds", async () => {
   assert.equal(res.body.ok, true);
 });
 
+test("compiled web client is served for an SPA route", async () => {
+  const res = await fetch(base + "/reset-password");
+  assert.equal(res.status, 200);
+  assert.match(await res.text(), /<div id="root"><\/div>/);
+});
+
 test("login succeeds with seeded owner", async () => {
   const res = await api("/auth/login", { method: "POST", body: { email: "demo@markethub.test", password: "password123" } });
   assert.equal(res.status, 200);
@@ -241,4 +247,69 @@ test("billing: owner can activate a plan and regain access; staff cannot activat
 
   const m = await api("/markets", { method: "POST", token, body: { name: "Now Allowed" } });
   assert.equal(m.status, 201);
+});
+
+test("operations: market date, CRM link, approval, payment, and booth map persist together", async () => {
+  const token = await loginDemo();
+  const markets = await api("/markets", { token });
+  const vendors = await api("/vendors", { token });
+  const market = markets.body.markets[0];
+  const vendor = vendors.body.vendors[0];
+
+  const date = await api("/operations/market-dates", {
+    method: "POST",
+    token,
+    body: { market_id: market.id, event_date: "2026-10-03" },
+  });
+  assert.equal(date.status, 201);
+
+  const link = await api(`/operations/vendor-markets/${vendor.id}/${market.id}`, {
+    method: "PUT",
+    token,
+    body: { stage_override: "Applied", notes: "Prefers a corner booth" },
+  });
+  assert.equal(link.status, 200);
+  assert.equal(link.body.vendor_market.stage_override, "Applied");
+
+  const approval = await api("/operations/approvals", {
+    method: "POST",
+    token,
+    body: { vendor_id: vendor.id, market_date_id: date.body.market_date.id },
+  });
+  assert.equal(approval.status, 201);
+  assert.equal(approval.body.approval.status, "pending");
+  assert.ok(approval.body.approval.amount_due_cents > 0);
+
+  const approved = await api(`/operations/approvals/${approval.body.approval.id}/approve`, { method: "POST", token });
+  assert.equal(approved.status, 200);
+  assert.equal(approved.body.approval.status, "awaiting_payment");
+  assert.ok(approved.body.approval.payment_deadline_at);
+
+  const reminder = await api(`/operations/approvals/${approval.body.approval.id}/reminder`, { method: "POST", token });
+  assert.equal(reminder.status, 200);
+  assert.equal(reminder.body.approval.reminder_count, 1);
+
+  const paid = await api(`/operations/approvals/${approval.body.approval.id}/record-payment`, {
+    method: "POST",
+    token,
+    body: { payment_method: "cash" },
+  });
+  assert.equal(paid.status, 200);
+  assert.equal(paid.body.approval.status, "paid");
+
+  const layout = await api("/operations/layouts", {
+    method: "POST",
+    token,
+    body: {
+      market_date_id: date.body.market_date.id,
+      name: "October layout",
+      spots: [{ code: "B1", kind: "tent", vendor_id: vendor.id, x: 8, y: 18, width: 66, height: 58, rotation: 0, sort_order: 1 }],
+    },
+  });
+  assert.equal(layout.status, 201);
+  assert.equal(layout.body.layout.spots[0].vendor_id, vendor.id);
+
+  const list = await api(`/operations/approvals?market_date_id=${date.body.market_date.id}`, { token });
+  assert.equal(list.status, 200);
+  assert.equal(list.body.approvals[0].status, "paid");
 });

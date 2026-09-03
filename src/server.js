@@ -1,4 +1,6 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 const helmet = require("helmet");
 const cors = require("cors");
 const morgan = require("morgan");
@@ -16,6 +18,7 @@ const billingRoutes = require("./routes/billing.routes");
 const marketRoutes = require("./routes/markets.routes");
 const vendorRoutes = require("./routes/vendors.routes");
 const webhookRoutes = require("./routes/webhooks.routes");
+const operationsRoutes = require("./routes/operations.routes");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -65,6 +68,21 @@ app.use("/settings", settingsRoutes);
 app.use("/billing", billingRoutes);
 app.use("/markets", marketRoutes);
 app.use("/vendors", vendorRoutes);
+app.use("/operations", operationsRoutes);
+
+// Production deploys use one Render web service: Express serves both the API
+// and the compiled React app. Development continues to use Vite separately.
+const webDist = path.join(__dirname, "..", "dist");
+const apiPrefixes = ["/auth", "/org", "/settings", "/billing", "/markets", "/vendors", "/operations", "/webhooks", "/health", "/ready"];
+if (fs.existsSync(webDist)) {
+  app.use(express.static(webDist, { maxAge: config.env === "production" ? "1h" : 0, index: false }));
+  // A regexp works in both Express 4 and 5; bare "*" is no longer valid in
+  // Express 5's route parser.
+  app.get(/.*/, (req, res, next) => {
+    if (apiPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`))) return next();
+    return res.sendFile(path.join(webDist, "index.html"));
+  });
+}
 
 app.use(notFound);
 app.use(errorHandler);

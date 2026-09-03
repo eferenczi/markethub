@@ -27,10 +27,9 @@ What the code already does, and what you configure per environment.
    keys must be re-entered.
 2. **HTTPS everywhere** — API and web both over TLS (Render/Vercel/Netlify give
    free certs).
-3. **Managed database + backups** — move off SQLite to Postgres for production
-   (`DB_CLIENT=pg`, `DATABASE_URL=…`). Enable your provider's automated daily
-   backups and test a restore. (SQLite users: schedule `npm run backup` and copy
-   the file off-box.)
+3. **Managed database + backups** — production uses the Render Postgres service
+   defined in `render.yaml`. Enable its backups/retention level appropriate to
+   your plan and test a restore before relying on it for event records.
 4. **Error tracking** — create a Sentry project, set `SENTRY_DSN`, install
    `@sentry/node`.
 5. **Uptime monitoring** — a monitor (e.g. UptimeRobot/BetterStack) hitting
@@ -38,7 +37,9 @@ What the code already does, and what you configure per environment.
 6. **Staging environment** — a second deploy with its own DB and
    `NODE_ENV=production`, for testing releases before production.
 7. **Log retention** — keep your host's logs; ship to a log service if needed.
-8. **CORS** — set `CORS_ORIGINS` to your real web domain(s).
+8. **CORS** — set `APP_BASE_URL` and `CORS_ORIGINS` to the exact live web
+   domain. The production server serves both the React app and API from that
+   same domain.
 9. **Platform Stripe** — real product/price IDs, live webhook secret, and set
    `ALLOW_MANUAL_BILLING` unset (so test activation is off in production).
 10. **Dependency updates** — enable Dependabot/`npm audit` in CI over time.

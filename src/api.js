@@ -1,6 +1,7 @@
 // Talks to the MarketHub backend. Point VITE_API_URL at your API in a .env file
 // (see .env.example). Defaults to http://localhost:4000 for local development.
-const BASE = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/$/, "");
+const configuredApiUrl = import.meta.env.VITE_API_URL;
+const BASE = (configuredApiUrl || (import.meta.env.DEV ? "http://localhost:4000" : "")).replace(/\/$/, "");
 const TOKEN_KEY = "mh_token";
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
@@ -15,7 +16,7 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
   try {
     res = await fetch(BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
   } catch {
-    throw new Error(`Can't reach the API at ${BASE}. Is the backend running and CORS set?`);
+    throw new Error(`Can't reach the API${BASE ? ` at ${BASE}` : ""}. Is the backend running and CORS set?`);
   }
 
   const text = await res.text();
@@ -65,6 +66,28 @@ export const api = {
   createVendor: (body) => request("/vendors", { method: "POST", body }),
   updateVendor: (id, body) => request(`/vendors/${id}`, { method: "PATCH", body }),
   deleteVendor: (id) => request(`/vendors/${id}`, { method: "DELETE" }),
+  // shared market operations
+  getMarketDates: (marketId) => request(`/operations/market-dates${marketId ? `?market_id=${marketId}` : ""}`),
+  createMarketDate: (body) => request("/operations/market-dates", { method: "POST", body }),
+  updateMarketDate: (id, body) => request(`/operations/market-dates/${id}`, { method: "PATCH", body }),
+  getVendorMarkets: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, value]) => value != null && value !== "")).toString();
+    return request(`/operations/vendor-markets${q ? `?${q}` : ""}`);
+  },
+  saveVendorMarket: (vendorId, marketId, body = {}) => request(`/operations/vendor-markets/${vendorId}/${marketId}`, { method: "PUT", body }),
+  deleteVendorMarket: (vendorId, marketId) => request(`/operations/vendor-markets/${vendorId}/${marketId}`, { method: "DELETE" }),
+  getApprovals: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, value]) => value != null && value !== "")).toString();
+    return request(`/operations/approvals${q ? `?${q}` : ""}`);
+  },
+  createApproval: (body) => request("/operations/approvals", { method: "POST", body }),
+  updateApproval: (id, body) => request(`/operations/approvals/${id}`, { method: "PATCH", body }),
+  approveApplication: (id) => request(`/operations/approvals/${id}/approve`, { method: "POST" }),
+  sendPaymentReminder: (id) => request(`/operations/approvals/${id}/reminder`, { method: "POST" }),
+  recordPayment: (id, payment_method) => request(`/operations/approvals/${id}/record-payment`, { method: "POST", body: { payment_method } }),
+  getLayouts: (marketDateId) => request(`/operations/layouts?market_date_id=${marketDateId}`),
+  createLayout: (body) => request("/operations/layouts", { method: "POST", body }),
+  updateLayout: (id, body) => request(`/operations/layouts/${id}`, { method: "PUT", body }),
   // billing
   getBilling: () => request("/billing"),
   checkout: (plan_code) => request("/billing/checkout", { method: "POST", body: { plan_code } }),

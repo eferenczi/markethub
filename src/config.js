@@ -13,23 +13,24 @@ function req(name, fallback) {
   throw new Error(`[config] Missing required env var: ${name}`);
 }
 
+const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:5173";
+const corsOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+if (!corsOrigins.includes(appBaseUrl)) corsOrigins.push(appBaseUrl);
+
 const config = {
   env: process.env.NODE_ENV || "development",
   port: parseInt(process.env.PORT || "4000", 10),
-  corsOrigins: (process.env.CORS_ORIGINS || "http://localhost:5173")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean),
+  corsOrigins,
   jwtSecret: req("JWT_SECRET", "dev-insecure-jwt-secret-change-me"),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
   encryptionKey: req("APP_ENCRYPTION_KEY", "dev-insecure-encryption-key-change-me"),
-  appBaseUrl: process.env.APP_BASE_URL || "http://localhost:5173",
-  mail: {
-    host: process.env.SMTP_HOST || "",
-    port: parseInt(process.env.SMTP_PORT || "587", 10),
-    user: process.env.SMTP_USER || "",
-    pass: process.env.SMTP_PASS || "",
-    from: process.env.MAIL_FROM || "MarketHub <no-reply@example.com>",
+  appBaseUrl,
+  platformSendgrid: {
+    apiKey: process.env.PLATFORM_SENDGRID_API_KEY || "",
+    from: process.env.PLATFORM_SENDGRID_FROM_EMAIL || "",
   },
   billing: {
     trialDays: parseInt(process.env.TRIAL_DAYS || "14", 10),
@@ -54,5 +55,11 @@ if (config.env === "production") {
   if (!process.env.APP_ENCRYPTION_KEY) missing.push("APP_ENCRYPTION_KEY");
   if (missing.length) {
     throw new Error(`Refusing to start in production without secure secrets: ${missing.join(", ")}. Set them in the environment.`);
+  }
+  if (!config.platformSendgrid.apiKey) {
+    throw new Error("Refusing to start in production without PLATFORM_SENDGRID_API_KEY so password resets and invitations can be delivered.");
+  }
+  if (config.platformSendgrid.apiKey && !config.platformSendgrid.from) {
+    throw new Error("PLATFORM_SENDGRID_FROM_EMAIL is required when PLATFORM_SENDGRID_API_KEY is set.");
   }
 }

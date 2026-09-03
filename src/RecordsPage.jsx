@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
-  Building2, Store, Plus, Trash2, Loader2, Check, X, ArrowLeft, Pencil,
+  Building2, Store, Plus, Trash2, Loader2, Check, X, ArrowLeft, Pencil, CalendarDays, CreditCard,
 } from "lucide-react";
 import { api } from "./api";
 import { C, FD, FB } from "./theme";
@@ -169,6 +169,111 @@ function VendorsTab({ canWrite, notify }) {
   );
 }
 
+/* ---------------- Live event operations ---------------- */
+function OperationsTab({ canWrite, notify }) {
+  const [markets, setMarkets] = useState(null);
+  const [vendors, setVendors] = useState(null);
+  const [marketId, setMarketId] = useState("");
+  const [dates, setDates] = useState([]);
+  const [dateId, setDateId] = useState("");
+  const [approvals, setApprovals] = useState([]);
+  const [newDate, setNewDate] = useState("");
+  const [vendorId, setVendorId] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const loadDates = async (id, preferredDateId) => {
+    if (!id) { setDates([]); setDateId(""); setApprovals([]); return; }
+    try {
+      const r = await api.getMarketDates(id);
+      setDates(r.market_dates);
+      const next = preferredDateId || r.market_dates.find((d) => d.status !== "skipped")?.id || "";
+      setDateId(String(next));
+    } catch (e) { notify(e.message, "err"); }
+  };
+  const loadApprovals = async (id) => {
+    if (!id) { setApprovals([]); return; }
+    try { setApprovals((await api.getApprovals({ market_date_id: id })).approvals); } catch (e) { notify(e.message, "err"); }
+  };
+
+  useEffect(() => {
+    Promise.all([api.getMarkets(), api.getVendors()])
+      .then(([m, v]) => {
+        setMarkets(m.markets.filter((x) => !x.archived));
+        setVendors(v.vendors);
+        if (m.markets.find((x) => !x.archived)) setMarketId(String(m.markets.find((x) => !x.archived).id));
+      })
+      .catch((e) => notify(e.message, "err"));
+  }, []);
+  useEffect(() => { loadDates(marketId); }, [marketId]);
+  useEffect(() => { loadApprovals(dateId); }, [dateId]);
+
+  const addDate = async () => {
+    if (!newDate) return notify("Choose an event date", "err");
+    setBusy(true);
+    try {
+      const r = await api.createMarketDate({ market_id: Number(marketId), event_date: newDate });
+      setNewDate("");
+      await loadDates(marketId, r.market_date.id);
+      notify("Market date created");
+    } catch (e) { notify(e.message, "err"); } finally { setBusy(false); }
+  };
+  const addApproval = async () => {
+    if (!vendorId) return notify("Choose a vendor", "err");
+    setBusy(true);
+    try {
+      await api.createApproval({ vendor_id: Number(vendorId), market_date_id: Number(dateId) });
+      setVendorId("");
+      await loadApprovals(dateId);
+      notify("Vendor added as an application");
+    } catch (e) { notify(e.message, "err"); } finally { setBusy(false); }
+  };
+  const approve = async (approval) => {
+    try { await api.approveApplication(approval.id); await loadApprovals(dateId); notify("Approved; 24-hour payment window started"); } catch (e) { notify(e.message, "err"); }
+  };
+  const paid = async (approval) => {
+    try { await api.recordPayment(approval.id, "cash"); await loadApprovals(dateId); notify("Payment recorded"); } catch (e) { notify(e.message, "err"); }
+  };
+
+  if (!markets || !vendors) return <Loading />;
+  const selectedDate = dates.find((d) => String(d.id) === String(dateId));
+  const dollars = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
+  const status = (value) => ({ pending: "Application", awaiting_payment: "Awaiting payment", held: "Held", paid: "Paid", released: "Released" }[value] || value);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-4">
+        <p style={{ color: C.faint }} className="text-[10.5px] font-bold uppercase tracking-wide mb-2">Market event</p>
+        <div className="grid sm:grid-cols-2 gap-2">
+          <select value={marketId} onChange={(e) => setMarketId(e.target.value)} style={inp} className="px-3 py-2 rounded-lg text-[13px] font-semibold outline-none">
+            {markets.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+          {canWrite && <div className="flex gap-2"><input value={newDate} type="date" onChange={(e) => setNewDate(e.target.value)} style={inp} className="flex-1 px-3 py-2 rounded-lg text-[13px] outline-none" /><button onClick={addDate} disabled={busy} style={{ background: C.pine, color: "#fff" }} className="px-3 py-2 rounded-lg text-[13px] font-bold"><Plus size={15} /></button></div>}
+        </div>
+        <div className="flex flex-wrap gap-2 mt-3">
+          {dates.map((d) => <button key={d.id} onClick={() => setDateId(String(d.id))} style={{ background: String(d.id) === String(dateId) ? C.pine : C.paper2, color: String(d.id) === String(dateId) ? "#fff" : C.sub }} className="px-3 py-1.5 rounded-full text-[12px] font-semibold">{d.event_date}{d.status === "skipped" ? " · skipped" : ""}</button>)}
+          {dates.length === 0 && <span style={{ color: C.faint }} className="text-[12.5px]">Add your first scheduled event date.</span>}
+        </div>
+      </div>
+
+      {selectedDate && <>
+        <div style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3"><CalendarDays size={16} color={C.pine} /><div><p className="text-[13.5px] font-semibold">{selectedDate.event_date}</p><p style={{ color: C.sub }} className="text-[11.5px]">Add vendors, approve them, and record offline payments.</p></div></div>
+          {canWrite && <div className="flex gap-2"><select value={vendorId} onChange={(e) => setVendorId(e.target.value)} style={inp} className="flex-1 px-3 py-2 rounded-lg text-[13px] outline-none"><option value="">Choose vendor…</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.business_name}{v.booth_type === "truck" ? " · truck" : ""}</option>)}</select><button onClick={addApproval} disabled={busy} style={{ background: C.honey, color: C.pineDeep }} className="px-3 py-2 rounded-lg text-[13px] font-bold flex items-center gap-1"><Plus size={15} /> Add</button></div>}
+        </div>
+        <div className="flex flex-col gap-2">
+          {approvals.length === 0 && <Empty label="No vendor applications for this event yet." />}
+          {approvals.map((a) => <div key={a.id} style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-xl p-3 flex items-center gap-3">
+            <div style={{ background: C.berry }} className="w-9 h-9 rounded-lg flex items-center justify-center"><Store size={16} color="#fff" /></div>
+            <div className="flex-1 min-w-0"><p className="text-[13.5px] font-semibold truncate">{a.business_name}</p><p style={{ color: C.sub }} className="text-[11.5px]">{a.booth_type} · due {dollars(a.amount_due_cents)} · {status(a.status)}</p></div>
+            {canWrite && a.status === "pending" && <button onClick={() => approve(a)} style={{ background: C.pine, color: "#fff" }} className="px-3 py-2 rounded-lg text-[12px] font-bold"><Check size={14} /></button>}
+            {canWrite && ["awaiting_payment", "held"].includes(a.status) && <button onClick={() => paid(a)} style={{ background: C.honey, color: C.pineDeep }} className="px-3 py-2 rounded-lg text-[12px] font-bold flex items-center gap-1"><CreditCard size={13} /> Cash paid</button>}
+          </div>)}
+        </div>
+      </>}
+    </div>
+  );
+}
+
 function Loading() {
   return <div style={{ color: C.sub }} className="flex items-center gap-2 text-[13px] py-8"><Loader2 size={16} className="animate-spin" /> Loading…</div>;
 }
@@ -189,11 +294,11 @@ export default function RecordsPage({ user, onClose }) {
         <h1 style={{ fontFamily: FD, fontWeight: 600 }} className="text-[26px] mb-1">Records</h1>
         <p style={{ color: C.sub }} className="text-[13.5px] mb-5">Live data saved to your organization's database. Everything here persists and is private to your org.</p>
         <div style={{ background: C.paper2 }} className="p-1 rounded-full inline-flex mb-5">
-          {[["markets", "Markets"], ["vendors", "Vendors"]].map(([k, l]) => (
+          {[["markets", "Markets"], ["vendors", "Vendors"], ["operations", "Event Operations"]].map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)} style={{ background: tab === k ? C.card : "transparent", color: tab === k ? C.ink : C.sub }} className="px-5 py-1.5 rounded-full text-[13px] font-semibold">{l}</button>
           ))}
         </div>
-        {tab === "markets" ? <MarketsTab canWrite={canWrite} notify={notify} /> : <VendorsTab canWrite={canWrite} notify={notify} />}
+        {tab === "markets" ? <MarketsTab canWrite={canWrite} notify={notify} /> : tab === "vendors" ? <VendorsTab canWrite={canWrite} notify={notify} /> : <OperationsTab canWrite={canWrite} notify={notify} />}
       </div>
       <Toast toast={toast} />
     </div>

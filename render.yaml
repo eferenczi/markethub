@@ -1,30 +1,47 @@
-# One-click-ish deploy on Render. Push this repo to GitHub, then in Render:
-# New +  ->  Blueprint  ->  pick this repo. It reads this file.
+# Production Render Blueprint: one HTTPS web service (React + API) and a
+# managed Postgres database. Add secrets in Render after the Blueprint creates
+# the service; they are intentionally never committed here.
 services:
   - type: web
-    name: markethub-api
+    name: markethub
     runtime: node
-    plan: free
-    buildCommand: npm install && npm run migrate
+    plan: starter
+    # Vite is needed only to compile the React bundle. Prune it and the mobile
+    # build tooling before runtime so the web service contains server packages
+    # only.
+    buildCommand: npm ci --include=dev && npm run build && npm prune --omit=dev
+    preDeployCommand: npm run db:migrate
     startCommand: npm start
+    healthCheckPath: /ready
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DB_CLIENT
+        value: pg
+      - key: DB_SSL
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: markethub-db
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: APP_ENCRYPTION_KEY
         generateValue: true
-      - key: DB_CLIENT
-        value: better-sqlite3
-      - key: DB_FILE
-        value: /var/data/markethub.sqlite3
-      - key: CORS_ORIGINS
-        sync: false
       - key: APP_BASE_URL
         sync: false
-    disk:
-      name: data
-      mountPath: /var/data
-      sizeGB: 1
-# NOTE: The free plan sleeps when idle. For real use, upgrade the plan and switch
-# DB_CLIENT to "pg" with a Render/Supabase/Neon Postgres DATABASE_URL instead of the disk.
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PLATFORM_SENDGRID_API_KEY
+        sync: false
+      - key: PLATFORM_SENDGRID_FROM_EMAIL
+        sync: false
+      - key: PLATFORM_STRIPE_SECRET
+        sync: false
+      - key: PLATFORM_STRIPE_WEBHOOK_SECRET
+        sync: false
+
+databases:
+  - name: markethub-db
+    plan: basic-256mb

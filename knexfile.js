@@ -20,9 +20,13 @@ if (client === "better-sqlite3" || client === "sqlite3") {
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
   };
-  // Managed Postgres providers usually require SSL.
+  // Enable SSL explicitly for external managed connections. Render's private
+  // DATABASE_URL does not require it, while providers such as Supabase do.
   if (client === "pg" && process.env.DATABASE_URL) {
-    base.connection = { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } };
+    base.connection = {
+      connectionString: process.env.DATABASE_URL,
+      ...(process.env.DB_SSL === "true" ? { ssl: { rejectUnauthorized: false } } : {}),
+    };
   }
 }
 
