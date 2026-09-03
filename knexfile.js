@@ -32,4 +32,7 @@ if (client === "better-sqlite3" || client === "sqlite3") {
 
 const config = { ...base, connection: base.connection || connection };
 
-module.exports = { development: config, production: config };
+// Render's private beta runs with NODE_ENV=staging. Keep every deployed
+// environment on the same database configuration, while local development can
+// still select SQLite through DB_CLIENT.
+module.exports = { development: config, staging: config, production: config };
