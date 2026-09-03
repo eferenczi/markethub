@@ -9,7 +9,7 @@ services:
     # Vite is needed only to compile the React bundle. Prune it and the mobile
     # build tooling before runtime so the web service contains server packages
     # only.
-    buildCommand: npm ci --include=dev && npm run build && npm prune --omit=dev
+    buildCommand: npm install --include=dev && npm run build && npm prune --omit=dev
     preDeployCommand: npm run db:migrate
     startCommand: npm start
     healthCheckPath: /ready
