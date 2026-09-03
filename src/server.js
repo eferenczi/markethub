@@ -19,6 +19,7 @@ const marketRoutes = require("./routes/markets.routes");
 const vendorRoutes = require("./routes/vendors.routes");
 const webhookRoutes = require("./routes/webhooks.routes");
 const operationsRoutes = require("./routes/operations.routes");
+const applicationsRoutes = require("./routes/applications.routes");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -46,7 +47,7 @@ app.use(globalLimiter);
 app.use("/webhooks", webhookRoutes);
 
 // JSON for everything else.
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "18mb" }));
 
 // Throttle auth endpoints harder to slow down credential-stuffing.
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50, standardHeaders: true, legacyHeaders: false, skip: skipInTest });
@@ -69,11 +70,12 @@ app.use("/billing", billingRoutes);
 app.use("/markets", marketRoutes);
 app.use("/vendors", vendorRoutes);
 app.use("/operations", operationsRoutes);
+app.use("/applications", applicationsRoutes);
 
 // Production deploys use one Render web service: Express serves both the API
 // and the compiled React app. Development continues to use Vite separately.
 const webDist = path.join(__dirname, "..", "dist");
-const apiPrefixes = ["/auth", "/org", "/settings", "/billing", "/markets", "/vendors", "/operations", "/webhooks", "/health", "/ready"];
+const apiPrefixes = ["/auth", "/org", "/settings", "/billing", "/markets", "/vendors", "/operations", "/applications", "/webhooks", "/health", "/ready"];
 if (fs.existsSync(webDist)) {
   app.use(express.static(webDist, { maxAge: config.env === "production" ? "1h" : 0, index: false }));
   // A regexp works in both Express 4 and 5; bare "*" is no longer valid in

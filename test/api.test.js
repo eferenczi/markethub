@@ -313,3 +313,50 @@ test("operations: market date, CRM link, approval, payment, and booth map persis
   assert.equal(list.status, 200);
   assert.equal(list.body.approvals[0].status, "paid");
 });
+
+test("vendor applications save contact details, uploads, and CRM review status", async () => {
+  const token = await loginDemo();
+  const org = await api("/org", { token });
+  const market = (await api("/markets", { token })).body.markets[0];
+  const key = org.body.org.public_apply_key;
+
+  const publicForm = await api(`/applications/public/${key}`);
+  assert.equal(publicForm.status, 200);
+  assert.ok(publicForm.body.markets.some((item) => item.id === market.id));
+
+  const submitted = await api(`/applications/public/${key}`, {
+    method: "POST",
+    body: {
+      market_id: market.id,
+      business_name: "Pilot Pie Co.",
+      contact_name: "Pat Vendor",
+      phone: "305-555-0101",
+      email: "pat@pilotpie.test",
+      category: "Bakery",
+      booth_type: "tent",
+      instagram: "@pilotpie",
+      assets: [
+        { kind: "insurance", file_name: "insurance.pdf", mime_type: "application/pdf", data: "data:application/pdf;base64,SGVsbG8=" },
+        { kind: "product_photo", file_name: "pie.jpg", mime_type: "image/jpeg", data: "data:image/jpeg;base64,SGVsbG8=" },
+      ],
+    },
+  });
+  assert.equal(submitted.status, 201);
+  assert.equal(submitted.body.application.status, "under_review");
+
+  const applications = await api("/applications", { token });
+  const application = applications.body.applications.find((item) => item.id === submitted.body.application.id);
+  assert.equal(application.business_name, "Pilot Pie Co.");
+  assert.equal(application.assets.length, 2);
+  assert.ok(!Object.hasOwn(application.assets[0], "data"), "assets must not expose upload data in the CRM list");
+
+  const asset = await fetch(`${base}/applications/${application.id}/assets/${application.assets[0].id}`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(asset.status, 200);
+  assert.equal(await asset.text(), "Hello");
+
+  const reviewed = await api(`/applications/${application.id}`, { method: "PATCH", token, body: { status: "approved", review_notes: "Great fit for the October market" } });
+  assert.equal(reviewed.status, 200);
+  assert.equal(reviewed.body.application.status, "approved");
+  const vendor = await db("vendors").where({ id: application.vendor_id }).first();
+  assert.equal(vendor.stage, "Approved");
+});

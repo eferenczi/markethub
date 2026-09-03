@@ -36,6 +36,15 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
   return data;
 }
 
+async function requestFile(path) {
+  const headers = {};
+  const tok = getToken();
+  if (tok) headers.Authorization = `Bearer ${tok}`;
+  const res = await fetch(BASE + path, { headers });
+  if (!res.ok) throw new Error("Could not open the uploaded file");
+  return res.blob();
+}
+
 export const api = {
   base: BASE,
   // auth
@@ -88,6 +97,13 @@ export const api = {
   getLayouts: (marketDateId) => request(`/operations/layouts?market_date_id=${marketDateId}`),
   createLayout: (body) => request("/operations/layouts", { method: "POST", body }),
   updateLayout: (id, body) => request(`/operations/layouts/${id}`, { method: "PUT", body }),
+  // public vendor applications + organizer review CRM
+  getPublicApplication: (key) => request(`/applications/public/${key}`, { auth: false }),
+  submitPublicApplication: (key, body) => request(`/applications/public/${key}`, { method: "POST", body, auth: false }),
+  getApplications: (status) => request(`/applications${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  updateApplication: (id, body) => request(`/applications/${id}`, { method: "PATCH", body }),
+  getApplicationAsset: (applicationId, assetId) => requestFile(`/applications/${applicationId}/assets/${assetId}`),
+  rotateApplicationLink: () => request("/applications/application-link/rotate", { method: "POST" }),
   // billing
   getBilling: () => request("/billing"),
   checkout: (plan_code) => request("/billing/checkout", { method: "POST", body: { plan_code } }),

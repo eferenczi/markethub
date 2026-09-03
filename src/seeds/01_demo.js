@@ -1,4 +1,5 @@
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 
 /**
  * Demo data so you can log in immediately after setup.
@@ -16,6 +17,7 @@ exports.seed = async function seed(knex) {
 
   const [orgId] = await knex("organizations").insert({
     name: "Central Makers Markets",
+    public_apply_key: crypto.randomBytes(18).toString("base64url"),
     plan_code: "pro",
     subscription_status: "active",
     subscription_provider: "manual",

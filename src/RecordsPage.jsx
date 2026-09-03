@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { api } from "./api";
 import { C, FD, FB } from "./theme";
+import ApplicationsTab from "./ApplicationsTab.jsx";
 
 const inp = { background: C.card, border: `1px solid ${C.line}`, color: C.ink };
 
@@ -290,15 +291,15 @@ export default function RecordsPage({ user, onClose }) {
   return (
     <div style={{ background: C.paper, minHeight: "100vh", fontFamily: FB, color: C.ink }}>
       <div style={{ maxWidth: 760, margin: "0 auto" }} className="px-4 py-6">
-        <button onClick={onClose} style={{ color: C.sub }} className="text-[13px] font-semibold flex items-center gap-1.5 mb-4"><ArrowLeft size={15} /> Back to console</button>
-        <h1 style={{ fontFamily: FD, fontWeight: 600 }} className="text-[26px] mb-1">Records</h1>
+        {onClose && <button onClick={onClose} style={{ color: C.sub }} className="text-[13px] font-semibold flex items-center gap-1.5 mb-4"><ArrowLeft size={15} /> Back to console</button>}
+        <h1 style={{ fontFamily: FD, fontWeight: 600 }} className="text-[26px] mb-1">MarketHub CRM</h1>
         <p style={{ color: C.sub }} className="text-[13.5px] mb-5">Live data saved to your organization's database. Everything here persists and is private to your org.</p>
         <div style={{ background: C.paper2 }} className="p-1 rounded-full inline-flex mb-5">
-          {[["markets", "Markets"], ["vendors", "Vendors"], ["operations", "Event Operations"]].map(([k, l]) => (
+          {[["markets", "Markets"], ["vendors", "Vendors"], ["applications", "Applications"], ["operations", "Event Operations"]].map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)} style={{ background: tab === k ? C.card : "transparent", color: tab === k ? C.ink : C.sub }} className="px-5 py-1.5 rounded-full text-[13px] font-semibold">{l}</button>
           ))}
         </div>
-        {tab === "markets" ? <MarketsTab canWrite={canWrite} notify={notify} /> : tab === "vendors" ? <VendorsTab canWrite={canWrite} notify={notify} /> : <OperationsTab canWrite={canWrite} notify={notify} />}
+        {tab === "markets" ? <MarketsTab canWrite={canWrite} notify={notify} /> : tab === "vendors" ? <VendorsTab canWrite={canWrite} notify={notify} /> : tab === "applications" ? <ApplicationsTab user={user} canWrite={canWrite} notify={notify} /> : <OperationsTab canWrite={canWrite} notify={notify} />}
       </div>
       <Toast toast={toast} />
     </div>

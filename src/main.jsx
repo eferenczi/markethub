@@ -7,6 +7,7 @@ import MobileApp from "./MarketHub.jsx";
 import { AuthProvider, useAuth, AuthScreens, ResetPassword, AccountBar } from "./auth.jsx";
 import SettingsPage from "./SettingsPage.jsx";
 import RecordsPage from "./RecordsPage.jsx";
+import ApplicationPage from "./ApplicationPage.jsx";
 import BillingPage from "./BillingPage.jsx";
 import { api } from "./api";
 import { isNative } from "./native";
@@ -82,6 +83,10 @@ function Root() {
 
   const path = window.location.pathname.replace(/\/+$/, "");
   const isReset = path.endsWith("/reset-password") || path === "/reset-password";
+  const hash = (window.location.hash || "").replace(/^#/, "").replace(/^\//, "");
+  const applicationKey = hash.startsWith("apply/") ? hash.slice("apply/".length).split("/")[0] : "";
+
+  if (applicationKey) return <ApplicationPage applicationKey={applicationKey} />;
 
   const loadBilling = useCallback(async () => {
     try {
@@ -116,9 +121,8 @@ function Root() {
   if (view === "records") return <RecordsPage user={user} onClose={() => setView(null)} />;
 
   // #/app -> mobile app, otherwise the manager console.
-  const hash = (window.location.hash || "").replace(/^#/, "").replace(/^\//, "").toLowerCase();
-  const isApp = hash.startsWith("app");
-  const AppView = isApp ? MobileApp : Console;
+  const isApp = hash.toLowerCase().startsWith("app");
+  const AppView = isApp ? MobileApp : null;
 
   return (
     <div>
@@ -130,7 +134,7 @@ function Root() {
         onBilling={() => setView("billing")}
         onLogout={logout}
       />
-      <AppView />
+      {AppView ? <AppView /> : <RecordsPage user={user} />}
     </div>
   );
 }
