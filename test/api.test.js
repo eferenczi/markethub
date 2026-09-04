@@ -324,6 +324,18 @@ test("vendor applications save contact details, uploads, and CRM review status",
   assert.equal(publicForm.status, 200);
   assert.ok(publicForm.body.markets.some((item) => item.id === market.id));
 
+  const minimal = await api(`/applications/public/${key}`, {
+    method: "POST",
+    body: {
+      market_id: market.id,
+      business_name: "Easy Entry Vendor",
+      contact_name: "Erin Vendor",
+      phone: "305-555-0199",
+      email: "erin@easyentry.test",
+    },
+  });
+  assert.equal(minimal.status, 201, "optional social media, insurance, and photos must not block an application");
+
   const submitted = await api(`/applications/public/${key}`, {
     method: "POST",
     body: {

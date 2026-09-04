@@ -34,15 +34,7 @@ const publicApplicationSchema = z.object({
   facebook: z.string().max(300).optional().default(""),
   website: z.string().max(500).optional().default(""),
   description: z.string().max(6000).optional().default(""),
-  assets: z.array(assetSchema).min(2).max(7),
-}).superRefine((value, ctx) => {
-  if (![value.instagram, value.tiktok, value.facebook].some(Boolean)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["instagram"], message: "Add at least one social media handle" });
-  }
-  const insurance = value.assets.filter((asset) => asset.kind === "insurance");
-  const photos = value.assets.filter((asset) => asset.kind === "booth_photo" || asset.kind === "product_photo");
-  if (insurance.length !== 1) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["assets"], message: "One insurance document is required" });
-  if (photos.length < 1) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["assets"], message: "At least one booth or product photo is required" });
+  assets: z.array(assetSchema).max(7).default([]),
 });
 
 const publicKey = () => crypto.randomBytes(18).toString("base64url");
@@ -97,10 +89,12 @@ router.post("/public/:key", validate(publicApplicationSchema), asyncHandler(asyn
       power_needed: req.body.power_needed, instagram: req.body.instagram, tiktok: req.body.tiktok, facebook: req.body.facebook,
       website: req.body.website, description: req.body.description,
     });
-    await trx("application_assets").insert(req.body.assets.map((asset) => ({
-      org_id: organization.id, application_id: applicationId, kind: asset.kind, file_name: asset.file_name,
-      mime_type: asset.mime_type, size_bytes: Buffer.byteLength(asset.data), data: asset.data,
-    })));
+    if (req.body.assets.length) {
+      await trx("application_assets").insert(req.body.assets.map((asset) => ({
+        org_id: organization.id, application_id: applicationId, kind: asset.kind, file_name: asset.file_name,
+        mime_type: asset.mime_type, size_bytes: Buffer.byteLength(asset.data), data: asset.data,
+      })));
+    }
     return trx("vendor_applications").where({ id: applicationId }).first();
   });
 
