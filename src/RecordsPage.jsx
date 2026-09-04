@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
-  Building2, Store, Plus, Trash2, Loader2, Check, X, ArrowLeft, Pencil, CalendarDays, CreditCard,
+  Building2, Store, Plus, Trash2, Loader2, Check, X, ArrowLeft, Pencil, CalendarDays, CreditCard, LayoutDashboard, Users, ClipboardList, MapPinned,
 } from "lucide-react";
 import { api } from "./api";
 import { C, FD, FB } from "./theme";
@@ -282,24 +282,44 @@ function Empty({ label }) {
   return <p style={{ color: C.faint }} className="text-[13px] py-6 text-center">{label}</p>;
 }
 
+function DashboardTab({ go, notify }) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    Promise.all([api.getMarkets(), api.getVendors(), api.getApplications()])
+      .then(([markets, vendors, applications]) => setData({ markets: markets.markets, vendors: vendors.vendors, applications: applications.applications }))
+      .catch((error) => notify(error.message, "err"));
+  }, []);
+  if (!data) return <Loading />;
+  const review = data.applications.filter((application) => application.status === "under_review").length;
+  const approved = data.applications.filter((application) => application.status === "approved").length;
+  const cards = [
+    { label: "Active markets", value: data.markets.filter((market) => !market.archived).length, icon: Building2, tone: C.pine, tab: "markets" },
+    { label: "Vendor contacts", value: data.vendors.length, icon: Users, tone: C.berry, tab: "vendors" },
+    { label: "Needs review", value: review, icon: ClipboardList, tone: C.honeyDeep, tab: "applications" },
+    { label: "Approved applications", value: approved, icon: Check, tone: C.pine, tab: "applications" },
+  ];
+  return <div className="flex flex-col gap-5">
+    <div style={{ background: `linear-gradient(135deg, ${C.pineDeep}, ${C.pine})` }} className="rounded-2xl p-6 text-white overflow-hidden relative"><div className="relative"><p className="text-white/70 text-[11px] font-bold uppercase tracking-wide">Organizer workspace</p><h2 style={{ fontFamily: FD }} className="text-[28px] font-semibold mt-1">Everything important, in one place.</h2><p className="text-white/75 text-[13.5px] mt-2 max-w-xl">Your vendors, markets, applications and event-day operations are saved securely to your organization’s live database.</p><div className="flex flex-wrap gap-2 mt-5"><button onClick={() => go("applications")} style={{ background: C.honey, color: C.pineDeep }} className="px-4 py-2 rounded-full text-[12.5px] font-bold">Review vendor applications</button><button onClick={() => go("markets")} className="px-4 py-2 rounded-full text-[12.5px] font-bold border border-white/30 text-white">Manage markets</button></div></div><MapPinned size={190} className="absolute -right-8 -bottom-14 text-white/10" /></div>
+    <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">{cards.map((card) => { const Icon = card.icon; return <button key={card.label} onClick={() => go(card.tab)} style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-4 text-left hover:shadow-md transition-shadow"><div style={{ background: C.paper2 }} className="w-9 h-9 rounded-xl flex items-center justify-center mb-3"><Icon size={17} color={card.tone} /></div><p style={{ fontFamily: FD, color: card.tone }} className="text-[25px] font-semibold leading-none">{card.value}</p><p style={{ color: C.sub }} className="text-[12.5px] mt-1">{card.label}</p></button>; })}</div>
+    <div style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-5"><p style={{ fontFamily: FD }} className="text-[19px] font-semibold">Pilot setup</p><p style={{ color: C.sub }} className="text-[13px] mt-1">For your first market-manager test: add the markets, copy the application link, then invite a small group of vendors before importing the full list.</p><div className="grid sm:grid-cols-3 gap-3 mt-4">{[["1", "Set up markets", "Add your five markets and booth fees.", "markets"], ["2", "Share application", "Copy the vendor link and collect insurance/photos.", "applications"], ["3", "Run event day", "Assign vendors and track payment status.", "operations"]].map(([number, title, detail, tab]) => <button key={number} onClick={() => go(tab)} style={{ background: C.paper2 }} className="rounded-xl p-3 text-left"><span style={{ background: C.pine, color: "#fff" }} className="inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold">{number}</span><p className="text-[13px] font-bold mt-2">{title}</p><p style={{ color: C.sub }} className="text-[11.5px] mt-1">{detail}</p></button>)}</div></div>
+  </div>;
+}
+
 export default function RecordsPage({ user, onClose }) {
-  const [tab, setTab] = useState("markets");
+  const [tab, setTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
   const notify = (msg, kind) => { setToast({ msg, kind }); setTimeout(() => setToast(null), 3000); };
   const canWrite = ["owner", "manager", "staff"].includes(user.role);
 
   return (
-    <div style={{ background: C.paper, minHeight: "100vh", fontFamily: FB, color: C.ink }}>
-      <div style={{ maxWidth: 760, margin: "0 auto" }} className="px-4 py-6">
-        {onClose && <button onClick={onClose} style={{ color: C.sub }} className="text-[13px] font-semibold flex items-center gap-1.5 mb-4"><ArrowLeft size={15} /> Back to console</button>}
-        <h1 style={{ fontFamily: FD, fontWeight: 600 }} className="text-[26px] mb-1">MarketHub CRM</h1>
-        <p style={{ color: C.sub }} className="text-[13.5px] mb-5">Live data saved to your organization's database. Everything here persists and is private to your org.</p>
-        <div style={{ background: C.paper2 }} className="p-1 rounded-full inline-flex mb-5">
-          {[["markets", "Markets"], ["vendors", "Vendors"], ["applications", "Applications"], ["operations", "Event Operations"]].map(([k, l]) => (
-            <button key={k} onClick={() => setTab(k)} style={{ background: tab === k ? C.card : "transparent", color: tab === k ? C.ink : C.sub }} className="px-5 py-1.5 rounded-full text-[13px] font-semibold">{l}</button>
-          ))}
-        </div>
-        {tab === "markets" ? <MarketsTab canWrite={canWrite} notify={notify} /> : tab === "vendors" ? <VendorsTab canWrite={canWrite} notify={notify} /> : tab === "applications" ? <ApplicationsTab user={user} canWrite={canWrite} notify={notify} /> : <OperationsTab canWrite={canWrite} notify={notify} />}
+    <div style={{ background: C.paper2, minHeight: "100vh", fontFamily: FB, color: C.ink }} className="p-3 sm:p-5">
+      <div style={{ maxWidth: 1260, margin: "0 auto", background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl overflow-hidden shadow-xl shadow-black/5 flex min-h-[760px]">
+        <aside style={{ background: C.pineDeep, width: 230 }} className="hidden md:flex flex-col p-3 text-white">
+          <div className="flex items-center gap-2 px-2 py-3 mb-4"><div style={{ background: "rgba(255,255,255,.13)" }} className="w-9 h-9 rounded-xl flex items-center justify-center"><Store size={18} color={C.honey} /></div><div><p style={{ fontFamily: FD }} className="text-[17px] font-semibold leading-none">MarketHub</p><p className="text-white/50 text-[10px] mt-1">Organizer console</p></div></div>
+          <div className="flex flex-col gap-1 flex-1">{[["dashboard", "Dashboard", LayoutDashboard], ["markets", "Markets", Building2], ["vendors", "Vendors", Users], ["applications", "Applications", ClipboardList], ["operations", "Event operations", CalendarDays]].map(([key, label, Icon]) => <button key={key} onClick={() => setTab(key)} style={{ background: tab === key ? "rgba(255,255,255,.13)" : "transparent", color: tab === key ? "#fff" : "rgba(255,255,255,.65)" }} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-semibold text-left"><Icon size={17} /> {label}</button>)}</div>
+          <div className="pt-3 border-t border-white/10"><p className="px-3 text-white/45 text-[10px]">Live data · private organization</p></div>
+        </aside>
+        <main className="flex-1 min-w-0"><div style={{ borderBottom: `1px solid ${C.line}`, background: C.card }} className="px-5 sm:px-7 py-4"><div className="flex items-center gap-3"><div className="flex-1"><p style={{ color: C.faint }} className="text-[10px] font-bold uppercase tracking-wide">Organizer console</p><h1 style={{ fontFamily: FD }} className="text-[23px] font-semibold">{({ dashboard: "Dashboard", markets: "Markets & pricing", vendors: "Vendor CRM", applications: "Vendor applications", operations: "Event operations" })[tab]}</h1></div>{onClose && <button onClick={onClose} style={{ color: C.sub }} className="text-[12px] font-semibold flex items-center gap-1"><ArrowLeft size={14} /> Back</button>}</div><div className="md:hidden flex gap-2 overflow-x-auto mt-3 pb-1">{[["dashboard", "Dashboard"], ["markets", "Markets"], ["vendors", "Vendors"], ["applications", "Applications"], ["operations", "Events"]].map(([key, label]) => <button key={key} onClick={() => setTab(key)} style={{ background: tab === key ? C.pine : C.paper2, color: tab === key ? "#fff" : C.sub }} className="px-3 py-1.5 rounded-full text-[11.5px] font-semibold whitespace-nowrap">{label}</button>)}</div></div><div className="p-5 sm:p-7 max-w-5xl">{tab === "dashboard" ? <DashboardTab go={setTab} notify={notify} /> : tab === "markets" ? <MarketsTab canWrite={canWrite} notify={notify} /> : tab === "vendors" ? <VendorsTab canWrite={canWrite} notify={notify} /> : tab === "applications" ? <ApplicationsTab user={user} canWrite={canWrite} notify={notify} /> : <OperationsTab canWrite={canWrite} notify={notify} />}</div></main>
       </div>
       <Toast toast={toast} />
     </div>
