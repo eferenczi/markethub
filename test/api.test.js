@@ -335,6 +335,18 @@ test("operations: market date, CRM link, approval, payment, and booth map persis
   const copiedLayout = await api(`/operations/layouts?market_date_id=${futureDate.body.market_date.id}`, { token });
   assert.equal(copiedLayout.body.layouts[0].spots[0].code, "B1", "new market dates start with the current market template");
 
+  const onboarding = await api("/templates", { method: "POST", token, body: { type: "onboarding", name: "Event rules", config: { questions: [{ id: "arrival", label: "I understand arrival rules.", type: "acknowledgment" }] } } });
+  assert.equal(onboarding.status, 201);
+  const assignment = await api(`/templates/${onboarding.body.template.id}/assign`, { method: "PUT", token, body: { market_id: market.id, market_date_id: date.body.market_date.id } });
+  assert.equal(assignment.status, 200);
+  const eventQuestions = await api(`/templates/event-questions?market_date_id=${date.body.market_date.id}`, { token });
+  assert.equal(eventQuestions.body.template.name, "Event rules");
+  const questionLink = await api(`/templates/event-questions/${approval.body.approval.id}/link`, { method: "POST", token });
+  const publicQuestions = await api(`/templates/public/questions/${questionLink.body.key}`);
+  assert.equal(publicQuestions.status, 200);
+  const acknowledged = await api(`/templates/public/questions/${questionLink.body.key}`, { method: "POST", body: { answers: { arrival: true } } });
+  assert.equal(acknowledged.status, 200);
+
   const list = await api(`/operations/approvals?market_date_id=${date.body.market_date.id}`, { token });
   assert.equal(list.status, 200);
   assert.equal(list.body.approvals[0].status, "paid");

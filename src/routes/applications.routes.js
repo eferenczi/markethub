@@ -57,7 +57,8 @@ async function applicationForOrg(orgId, id) {
 router.get("/public/:key", asyncHandler(async (req, res) => {
   const organization = await organizationForKey(req.params.key);
   const markets = await db("markets").where({ org_id: organization.id, archived: false }).select("id", "name", "location").orderBy("name");
-  res.json({ organization: { name: organization.name }, markets });
+  const market_templates = await db("market_template_assignments as a").join("organizer_templates as t", "t.id", "a.template_id").where({ "a.org_id": organization.id }).whereNull("a.market_date_id").whereIn("t.type", ["categories_spaces", "required_documents"]).select("a.market_id", "t.type", "t.config");
+  res.json({ organization: { name: organization.name }, markets, market_templates: market_templates.map((item) => ({ ...item, config: JSON.parse(item.config || "{}") })) });
 }));
 
 // Vendor-facing application. Creates or updates the CRM contact, then creates a

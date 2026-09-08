@@ -105,6 +105,15 @@ export const api = {
   createLayoutTemplate: (body) => request("/operations/layout-templates", { method: "POST", body }),
   updateLayoutTemplate: (id, body) => request(`/operations/layout-templates/${id}`, { method: "PUT", body }),
   applyLayoutTemplate: (id, market_date_id) => request(`/operations/layout-templates/${id}/apply`, { method: "POST", body: { market_date_id } }),
+  // organizer templates and vendor event questions
+  getTemplates: (type) => request(`/templates${type ? `?type=${encodeURIComponent(type)}` : ""}`),
+  createTemplate: (body) => request("/templates", { method: "POST", body }),
+  updateTemplate: (id, body) => request(`/templates/${id}`, { method: "PUT", body }),
+  assignTemplate: (id, body) => request(`/templates/${id}/assign`, { method: "PUT", body }),
+  getEventQuestions: (marketDateId) => request(`/templates/event-questions?market_date_id=${marketDateId}`),
+  createAcknowledgmentLink: (approvalId) => request(`/templates/event-questions/${approvalId}/link`, { method: "POST" }),
+  getPublicQuestions: (key) => request(`/templates/public/questions/${key}`, { auth: false }),
+  submitPublicQuestions: (key, answers) => request(`/templates/public/questions/${key}`, { method: "POST", body: { answers }, auth: false }),
   // public vendor applications + organizer review CRM
   getPublicApplication: (key) => request(`/applications/public/${key}`, { auth: false }),
   submitPublicApplication: (key, body) => request(`/applications/public/${key}`, { method: "POST", body, auth: false }),

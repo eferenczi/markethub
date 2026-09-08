@@ -8,6 +8,7 @@ import { AuthProvider, useAuth, AuthScreens, ResetPassword, AccountBar } from ".
 import SettingsPage from "./SettingsPage.jsx";
 import RecordsPage from "./RecordsPage.jsx";
 import ApplicationPage from "./ApplicationPage.jsx";
+import AcknowledgmentPage from "./AcknowledgmentPage.jsx";
 import BillingPage from "./BillingPage.jsx";
 import { api } from "./api";
 import { isNative } from "./native";
@@ -85,8 +86,10 @@ function Root() {
   const isReset = path.endsWith("/reset-password") || path === "/reset-password";
   const hash = (window.location.hash || "").replace(/^#/, "").replace(/^\//, "");
   const applicationKey = hash.startsWith("apply/") ? hash.slice("apply/".length).split("/")[0] : "";
+  const acknowledgmentKey = hash.startsWith("ack/") ? hash.slice("ack/".length).split("/")[0] : "";
 
   if (applicationKey) return <ApplicationPage applicationKey={applicationKey} />;
+  if (acknowledgmentKey) return <AcknowledgmentPage acknowledgmentKey={acknowledgmentKey} />;
 
   const loadBilling = useCallback(async () => {
     try {
