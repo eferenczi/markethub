@@ -12,10 +12,11 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const pilotMode = import.meta.env.VITE_PILOT_MODE === "true";
 
   useEffect(() => {
     (async () => {
-      if (!getToken()) return setLoading(false);
+      if (!getToken() && !pilotMode) return setLoading(false);
       try {
         const { user } = await api.me();
         setUser(user);
@@ -38,6 +39,7 @@ export function AuthProvider({ children }) {
     setUser(user);
   };
   const logout = () => {
+    if (pilotMode) return;
     setToken(null);
     setUser(null);
   };

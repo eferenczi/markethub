@@ -13,6 +13,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: staging
+      - key: PILOT_MODE
+        value: "true"
+      - key: VITE_PILOT_MODE
+        value: "true"
       - key: DB_CLIENT
         value: pg
       - key: DB_SSL

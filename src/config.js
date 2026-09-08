@@ -22,6 +22,9 @@ if (!corsOrigins.includes(appBaseUrl)) corsOrigins.push(appBaseUrl);
 
 const config = {
   env: process.env.NODE_ENV || "development",
+  // Private organizer pilot only. Leave this false for public web and native
+  // releases so the normal authentication flow remains enforced.
+  pilotMode: process.env.PILOT_MODE === "true",
   port: parseInt(process.env.PORT || "4000", 10),
   corsOrigins,
   jwtSecret: req("JWT_SECRET", "dev-insecure-jwt-secret-change-me"),

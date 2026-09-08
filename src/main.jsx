@@ -78,6 +78,7 @@ function Splash() {
 
 function Root() {
   const { user, loading, logout } = useAuth();
+  const pilotMode = import.meta.env.VITE_PILOT_MODE === "true";
   const [view, setView] = useState(null); // null | "settings" | "records" | "billing"
   const [billing, setBilling] = useState(undefined); // undefined=loading, null=error, object
 
@@ -97,8 +98,8 @@ function Root() {
   }, []);
 
   useEffect(() => {
-    if (user && !isReset) loadBilling();
-  }, [user, isReset, loadBilling]);
+    if (user && !isReset && !pilotMode) loadBilling();
+  }, [user, isReset, pilotMode, loadBilling]);
 
   if (isReset) {
     const token = new URLSearchParams(window.location.search).get("token") || "";
@@ -106,7 +107,11 @@ function Root() {
   }
 
   if (loading) return <Splash />;
-  if (!user) return <AuthScreens />;
+  if (!user) return pilotMode ? <Splash /> : <AuthScreens />;
+  // Private organizer pilot: direct access to the shared workspace. The
+  // account/billing chrome and all sign-in routes stay out of the way until
+  // authentication is deliberately re-enabled for the public launch.
+  if (pilotMode) return <RecordsPage user={user} />;
   if (billing === undefined) return <Splash />;
 
   // Explicit billing view (from the account bar).
