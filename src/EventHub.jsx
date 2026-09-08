@@ -1091,10 +1091,13 @@ export default function EventHub({ canWrite, notify }) {
   const [approvals, setApprovals] = useState([]);
   const [newDate, setNewDate] = useState("");
   const [view, setView] = useState("payments");
+  const datesRequest = useRef(0);
   const loadDates = async (id, preferred) => {
     if (!id) return;
+    const request = ++datesRequest.current;
     try {
       const result = await api.getMarketDates(id);
+      if (request !== datesRequest.current) return;
       setDates(result.market_dates);
       setDateId(
         String(
@@ -1104,7 +1107,7 @@ export default function EventHub({ canWrite, notify }) {
         ),
       );
     } catch (error) {
-      notify(error.message, "err");
+      if (request === datesRequest.current) notify(error.message, "err");
     }
   };
   const refreshApprovals = async () => {
@@ -1168,7 +1171,12 @@ export default function EventHub({ canWrite, notify }) {
         <div className="grid sm:grid-cols-2 gap-2">
           <select
             value={marketId}
-            onChange={(event) => setMarketId(event.target.value)}
+            onChange={(event) => {
+              setDates([]);
+              setDateId("");
+              setApprovals([]);
+              setMarketId(event.target.value);
+            }}
             style={inp}
             className="px-3 py-2.5 rounded-lg text-[13px] font-semibold outline-none"
           >
@@ -1263,6 +1271,7 @@ export default function EventHub({ canWrite, notify }) {
             />
           ) : view === "map" ? (
             <MapEditor
+              key={`map-${marketId}-${dateId}`}
               dateId={dateId}
               marketId={marketId}
               vendors={vendors}

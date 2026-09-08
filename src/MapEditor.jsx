@@ -15,19 +15,41 @@ import { api } from "./api";
 import { C } from "./theme";
 
 const inp = { background: C.card, border: `1px solid ${C.line}`, color: C.ink };
+const number = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
 const cleanSpots = (spots) =>
   spots.map(
     (
       {
-        vendor_id: _vendor,
+        vendor_id,
         id: _id,
         layout_id: _layout,
         template_id: _template,
         ...spot
       },
       index,
-    ) => ({ ...spot, sort_order: index }),
+    ) => ({
+      ...spot,
+      vendor_id:
+        vendor_id === null || vendor_id === undefined || vendor_id === ""
+          ? null
+          : number(vendor_id),
+      x: number(spot.x),
+      y: number(spot.y),
+      width: Math.max(0.001, number(spot.width, 10)),
+      height: Math.max(0.001, number(spot.height, 8)),
+      rotation: number(spot.rotation),
+      sort_order: index,
+    }),
   );
+const nextCode = (spots, kind) => {
+  const prefix = kind === "truck" ? "F" : "B";
+  let number = 1;
+  while (spots.some((spot) => spot.code === `${prefix}${number}`)) number += 1;
+  return `${prefix}${number}`;
+};
 
 function SpotArtwork({ spot }) {
   if (spot.kind === "truck")
@@ -78,29 +100,37 @@ export default function MapEditor({
   const stageRef = useRef(null);
   const drag = useRef(null);
   const uploadRef = useRef(null);
+  const loadRevision = useRef(0);
   const selectedTemplate = templates?.find(
     (item) => String(item.id) === String(templateId),
   );
   const load = async () => {
+    const revision = ++loadRevision.current;
     try {
       const [layoutResult, templateResult] = await Promise.all([
         api.getLayouts(dateId),
         api.getLayoutTemplates(marketId),
       ]);
+      if (revision !== loadRevision.current) return;
       const current = layoutResult.layouts[0] || null;
       setLayout(current);
       setSpots(current?.spots || []);
       setTemplates(templateResult.templates);
       setTemplateId(String(templateResult.templates[0]?.id || ""));
     } catch (error) {
-      notify(error.message, "err");
+      if (revision === loadRevision.current) notify(error.message, "err");
     }
   };
   useEffect(() => {
     setLayout(null);
     setSpots([]);
     setTemplates(null);
+    setTemplateId("");
+    setSelectedIndex(null);
     load();
+    return () => {
+      loadRevision.current += 1;
+    };
   }, [dateId, marketId]);
   useEffect(() => {
     const move = (event) => {
@@ -208,15 +238,20 @@ export default function MapEditor({
     setSpots((current) =>
       current.map((spot, i) => (i === index ? { ...spot, ...change } : spot)),
     );
+  const removeSpot = (index) => {
+    setSpots((current) =>
+      current.filter((_, itemIndex) => itemIndex !== index),
+    );
+    setSelectedIndex(null);
+    notify("Spot removed — save the event map to keep this change");
+  };
   const duplicate = () => {
     if (selectedIndex == null) return;
     setSpots((current) => {
       const source = current[selectedIndex];
-      const number =
-        current.filter((spot) => spot.kind === source.kind).length + 1;
       const clone = {
         ...source,
-        code: `${source.kind === "truck" ? "F" : "B"}${number}`,
+        code: nextCode(current, source.kind),
         vendor_id: null,
         x: Math.min(100 - Number(source.width), Number(source.x) + 3),
         y: Math.min(100 - Number(source.height), Number(source.y) + 3),
@@ -230,7 +265,7 @@ export default function MapEditor({
     setSpots((current) => [
       ...current,
       {
-        code: `${kind === "truck" ? "F" : "B"}${current.filter((item) => item.kind === kind).length + 1}`,
+        code: nextCode(current, kind),
         kind,
         vendor_id: null,
         x: 10 + (current.length % 5) * 16,
@@ -511,6 +546,13 @@ export default function MapEditor({
             >
               <Plus size={13} /> Duplicate
             </button>
+            <button
+              onClick={() => removeSpot(selectedIndex)}
+              style={{ background: C.dangerSoft, color: C.danger }}
+              className="px-2.5 py-1.5 rounded-lg text-[12px] font-bold flex items-center gap-1"
+            >
+              <Trash2 size={13} /> Delete
+            </button>
           </div>
         )}
       </section>
@@ -568,10 +610,7 @@ export default function MapEditor({
                 <button
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => {
-                    setSpots((current) =>
-                      current.filter((_, i) => i !== index),
-                    );
-                    setSelectedIndex(null);
+                    removeSpot(index);
                   }}
                   className="absolute -right-1.5 -top-1.5 w-4 h-4 rounded-full bg-white text-red-700 shadow flex items-center justify-center"
                 >
