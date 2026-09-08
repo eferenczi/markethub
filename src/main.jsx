@@ -77,8 +77,7 @@ function Splash() {
 }
 
 function Root() {
-  const { user, loading, logout } = useAuth();
-  const pilotMode = import.meta.env.VITE_PILOT_MODE === "true";
+  const { user, loading, logout, pilot: pilotMode } = useAuth();
   const [view, setView] = useState(null); // null | "settings" | "records" | "billing"
   const [billing, setBilling] = useState(undefined); // undefined=loading, null=error, object
 

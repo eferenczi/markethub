@@ -12,14 +12,14 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const pilotMode = import.meta.env.VITE_PILOT_MODE === "true";
+  const [pilot, setPilot] = useState(false);
 
   useEffect(() => {
     (async () => {
-      if (!getToken() && !pilotMode) return setLoading(false);
       try {
-        const { user } = await api.me();
+        const { user, pilot: isPilot } = await api.me();
         setUser(user);
+        setPilot(Boolean(isPilot));
       } catch {
         setToken(null);
       } finally {
@@ -39,7 +39,7 @@ export function AuthProvider({ children }) {
     setUser(user);
   };
   const logout = () => {
-    if (pilotMode) return;
+    if (pilot) return;
     setToken(null);
     setUser(null);
   };
@@ -50,7 +50,7 @@ export function AuthProvider({ children }) {
     return () => { delete window.__mhLogout; };
   }, []);
 
-  return <AuthContext.Provider value={{ user, loading, login, register, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, pilot, login, register, logout }}>{children}</AuthContext.Provider>;
 }
 
 /* ------------------------------------------------------------------ */
