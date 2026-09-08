@@ -31,6 +31,7 @@ const PROVIDERS = [
       { key: "account_sid", label: "Account SID", placeholder: "AC…", required: true },
       { key: "auth_token", label: "Auth token", placeholder: "your auth token", secret: true, required: true },
       { key: "from_number", label: "From number", placeholder: "+13055550100" },
+      { key: "whatsapp_from", label: "WhatsApp sender", placeholder: "+14155238886" },
     ],
   },
 ];

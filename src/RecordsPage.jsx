@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import {
-  Building2, Store, Plus, Trash2, Loader2, Check, X, ArrowLeft, Pencil, CalendarDays, CreditCard, LayoutDashboard, Users, ClipboardList, MapPinned,
+  Building2, Store, Plus, Trash2, Loader2, Check, X, ArrowLeft, Pencil, CalendarDays, CreditCard, LayoutDashboard, Users, ClipboardList, MapPinned, Send,
 } from "lucide-react";
 import { api } from "./api";
 import { C, FD, FB } from "./theme";
 import ApplicationsTab from "./ApplicationsTab.jsx";
+import EventHub from "./EventHub.jsx";
+import CampaignsTab from "./CampaignsTab.jsx";
 
 const inp = { background: C.card, border: `1px solid ${C.line}`, color: C.ink };
 
@@ -22,7 +24,7 @@ function Toast({ toast }) {
 /* ---------------- Markets ---------------- */
 function MarketsTab({ canWrite, notify }) {
   const [rows, setRows] = useState(null);
-  const [form, setForm] = useState({ name: "", short_name: "", location: "", booth_fee: "", truck_fee: "", app_fee: "" });
+  const [form, setForm] = useState({ name: "", short_name: "", location: "", booth_fee: "", truck_fee: "", app_fee: "", payment_methods: ["stripe", "applepay", "googlepay", "paypal", "venmo", "zelle"] });
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null);
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
@@ -35,14 +37,14 @@ function MarketsTab({ canWrite, notify }) {
     if (!form.name.trim()) return notify("Market name is required", "err");
     setBusy(true);
     try {
-      await api.createMarket({ name: form.name.trim(), short_name: form.short_name.trim(), location: form.location.trim(), booth_fee: num(form.booth_fee), truck_fee: num(form.truck_fee), app_fee: num(form.app_fee) });
-      setForm({ name: "", short_name: "", location: "", booth_fee: "", truck_fee: "", app_fee: "" });
+      await api.createMarket({ name: form.name.trim(), short_name: form.short_name.trim(), location: form.location.trim(), booth_fee: num(form.booth_fee), truck_fee: num(form.truck_fee), app_fee: num(form.app_fee), payment_methods: form.payment_methods });
+      setForm({ name: "", short_name: "", location: "", booth_fee: "", truck_fee: "", app_fee: "", payment_methods: ["stripe", "applepay", "googlepay", "paypal", "venmo", "zelle"] });
       notify("Market saved");
       load();
     } catch (e) { notify(e.message, "err"); } finally { setBusy(false); }
   };
   const saveEdit = async (m) => {
-    try { await api.updateMarket(m.id, { name: m.name, short_name: m.short_name, location: m.location, booth_fee: num(m.booth_fee), truck_fee: num(m.truck_fee), app_fee: num(m.app_fee) }); setEditing(null); notify("Updated"); load(); }
+    try { await api.updateMarket(m.id, { name: m.name, short_name: m.short_name, location: m.location, booth_fee: num(m.booth_fee), truck_fee: num(m.truck_fee), app_fee: num(m.app_fee), payment_methods: m.payment_methods || [] }); setEditing(null); notify("Updated"); load(); }
     catch (e) { notify(e.message, "err"); }
   };
   const del = async (m) => { try { await api.deleteMarket(m.id); notify("Deleted"); load(); } catch (e) { notify(e.message, "err"); } };
@@ -61,6 +63,7 @@ function MarketsTab({ canWrite, notify }) {
             <input value={form.truck_fee} onChange={(e) => set("truck_fee", e.target.value)} placeholder="Truck $" type="number" style={inp} className="px-3 py-2 rounded-lg text-[13px] outline-none" />
             <input value={form.app_fee} onChange={(e) => set("app_fee", e.target.value)} placeholder="App $" type="number" style={inp} className="px-3 py-2 rounded-lg text-[13px] outline-none" />
           </div>
+          <div className="flex flex-wrap gap-2 mt-3">{["stripe", "applepay", "googlepay", "paypal", "venmo", "zelle", "cash"].map((method) => <label key={method} style={{ background: C.paper2, color: C.sub }} className="px-2.5 py-1.5 rounded-full text-[11.5px] font-semibold flex items-center gap-1.5"><input type="checkbox" checked={form.payment_methods.includes(method)} onChange={(event) => set("payment_methods", event.target.checked ? [...form.payment_methods, method] : form.payment_methods.filter((item) => item !== method))} /> {method}</label>)}</div>
           <button onClick={add} disabled={busy} style={{ background: C.pine, color: "#fff", opacity: busy ? 0.6 : 1 }} className="mt-3 px-4 py-2 rounded-lg text-[13px] font-bold flex items-center gap-1.5">
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add market
           </button>
@@ -72,14 +75,17 @@ function MarketsTab({ canWrite, notify }) {
           <div key={m.id} style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-xl p-3 flex items-center gap-3">
             <div style={{ background: C.pine }} className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"><Building2 size={16} color={C.honey} /></div>
             {editing === m.id ? (
-              <div className="flex-1 grid grid-cols-2 gap-1.5">
+              <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                 <input defaultValue={m.name} onChange={(e) => (m.name = e.target.value)} style={inp} className="px-2 py-1.5 rounded text-[13px] outline-none" />
                 <input defaultValue={m.location || ""} onChange={(e) => (m.location = e.target.value)} placeholder="Location" style={inp} className="px-2 py-1.5 rounded text-[13px] outline-none" />
+                <input defaultValue={m.booth_fee} onChange={(e) => (m.booth_fee = e.target.value)} placeholder="Booth $" type="number" style={inp} className="px-2 py-1.5 rounded text-[13px] outline-none" />
+                <input defaultValue={m.truck_fee} onChange={(e) => (m.truck_fee = e.target.value)} placeholder="Truck $" type="number" style={inp} className="px-2 py-1.5 rounded text-[13px] outline-none" />
               </div>
             ) : (
               <div className="flex-1 min-w-0">
                 <p className="text-[13.5px] font-semibold truncate">{m.name}</p>
-                <p style={{ color: C.sub }} className="text-[11.5px] truncate">{m.location || "—"} · booth ${m.booth_fee}</p>
+                <p style={{ color: C.sub }} className="text-[11.5px] truncate">{m.location || "—"} · booth ${m.booth_fee} · truck ${m.truck_fee}</p>
+                <p style={{ color: C.faint }} className="text-[10.5px] truncate">{(m.payment_methods || []).join(" · ") || "No payment methods selected"}</p>
               </div>
             )}
             {canWrite && (editing === m.id ? (
@@ -316,10 +322,10 @@ export default function RecordsPage({ user, onClose }) {
       <div style={{ maxWidth: 1260, margin: "0 auto", background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl overflow-hidden shadow-xl shadow-black/5 flex min-h-[760px]">
         <aside style={{ background: C.pineDeep, width: 230 }} className="hidden md:flex flex-col p-3 text-white">
           <div className="flex items-center gap-2 px-2 py-3 mb-4"><div style={{ background: "rgba(255,255,255,.13)" }} className="w-9 h-9 rounded-xl flex items-center justify-center"><Store size={18} color={C.honey} /></div><div><p style={{ fontFamily: FD }} className="text-[17px] font-semibold leading-none">MarketHub</p><p className="text-white/50 text-[10px] mt-1">Organizer console</p></div></div>
-          <div className="flex flex-col gap-1 flex-1">{[["dashboard", "Dashboard", LayoutDashboard], ["markets", "Markets", Building2], ["vendors", "Vendors", Users], ["applications", "Applications", ClipboardList], ["operations", "Event operations", CalendarDays]].map(([key, label, Icon]) => <button key={key} onClick={() => setTab(key)} style={{ background: tab === key ? "rgba(255,255,255,.13)" : "transparent", color: tab === key ? "#fff" : "rgba(255,255,255,.65)" }} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-semibold text-left"><Icon size={17} /> {label}</button>)}</div>
+          <div className="flex flex-col gap-1 flex-1">{[["dashboard", "Dashboard", LayoutDashboard], ["markets", "Markets", Building2], ["vendors", "Vendors", Users], ["applications", "Applications", ClipboardList], ["operations", "Event operations", CalendarDays], ["campaigns", "Campaigns", Send]].map(([key, label, Icon]) => <button key={key} onClick={() => setTab(key)} style={{ background: tab === key ? "rgba(255,255,255,.13)" : "transparent", color: tab === key ? "#fff" : "rgba(255,255,255,.65)" }} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-semibold text-left"><Icon size={17} /> {label}</button>)}</div>
           <div className="pt-3 border-t border-white/10"><p className="px-3 text-white/45 text-[10px]">Live data · private organization</p></div>
         </aside>
-        <main className="flex-1 min-w-0"><div style={{ borderBottom: `1px solid ${C.line}`, background: C.card }} className="px-5 sm:px-7 py-4"><div className="flex items-center gap-3"><div className="flex-1"><p style={{ color: C.faint }} className="text-[10px] font-bold uppercase tracking-wide">Organizer console</p><h1 style={{ fontFamily: FD }} className="text-[23px] font-semibold">{({ dashboard: "Dashboard", markets: "Markets & pricing", vendors: "Vendor CRM", applications: "Vendor applications", operations: "Event operations" })[tab]}</h1></div>{onClose && <button onClick={onClose} style={{ color: C.sub }} className="text-[12px] font-semibold flex items-center gap-1"><ArrowLeft size={14} /> Back</button>}</div><div className="md:hidden flex gap-2 overflow-x-auto mt-3 pb-1">{[["dashboard", "Dashboard"], ["markets", "Markets"], ["vendors", "Vendors"], ["applications", "Applications"], ["operations", "Events"]].map(([key, label]) => <button key={key} onClick={() => setTab(key)} style={{ background: tab === key ? C.pine : C.paper2, color: tab === key ? "#fff" : C.sub }} className="px-3 py-1.5 rounded-full text-[11.5px] font-semibold whitespace-nowrap">{label}</button>)}</div></div><div className="p-5 sm:p-7 max-w-5xl">{tab === "dashboard" ? <DashboardTab go={setTab} notify={notify} /> : tab === "markets" ? <MarketsTab canWrite={canWrite} notify={notify} /> : tab === "vendors" ? <VendorsTab canWrite={canWrite} notify={notify} /> : tab === "applications" ? <ApplicationsTab user={user} canWrite={canWrite} notify={notify} /> : <OperationsTab canWrite={canWrite} notify={notify} />}</div></main>
+        <main className="flex-1 min-w-0"><div style={{ borderBottom: `1px solid ${C.line}`, background: C.card }} className="px-5 sm:px-7 py-4"><div className="flex items-center gap-3"><div className="flex-1"><p style={{ color: C.faint }} className="text-[10px] font-bold uppercase tracking-wide">Organizer console</p><h1 style={{ fontFamily: FD }} className="text-[23px] font-semibold">{({ dashboard: "Dashboard", markets: "Markets & pricing", vendors: "Vendor CRM", applications: "Vendor applications", operations: "Event operations", campaigns: "Campaigns & newsletter" })[tab]}</h1></div>{onClose && <button onClick={onClose} style={{ color: C.sub }} className="text-[12px] font-semibold flex items-center gap-1"><ArrowLeft size={14} /> Back</button>}</div><div className="md:hidden flex gap-2 overflow-x-auto mt-3 pb-1">{[["dashboard", "Dashboard"], ["markets", "Markets"], ["vendors", "Vendors"], ["applications", "Applications"], ["operations", "Events"], ["campaigns", "Campaigns"]].map(([key, label]) => <button key={key} onClick={() => setTab(key)} style={{ background: tab === key ? C.pine : C.paper2, color: tab === key ? "#fff" : C.sub }} className="px-3 py-1.5 rounded-full text-[11.5px] font-semibold whitespace-nowrap">{label}</button>)}</div></div><div className="p-5 sm:p-7 max-w-5xl">{tab === "dashboard" ? <DashboardTab go={setTab} notify={notify} /> : tab === "markets" ? <MarketsTab canWrite={canWrite} notify={notify} /> : tab === "vendors" ? <VendorsTab canWrite={canWrite} notify={notify} /> : tab === "applications" ? <ApplicationsTab user={user} canWrite={canWrite} notify={notify} /> : tab === "campaigns" ? <CampaignsTab canWrite={canWrite} notify={notify} /> : <EventHub canWrite={canWrite} notify={notify} />}</div></main>
       </div>
       <Toast toast={toast} />
     </div>

@@ -25,6 +25,7 @@ const schemas = {
     account_sid: z.string().min(1),
     auth_token: z.string().min(1),
     from_number: z.string().optional().default(""),
+    whatsapp_from: z.string().optional().default(""),
   }),
 };
 

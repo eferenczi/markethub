@@ -171,6 +171,13 @@ router.post(
     const existing = await db("approvals").where({ vendor_id: vendor.id, market_date_id: market_date.id }).first();
     if (existing) throw new ApiError(409, "This vendor already has an approval for that market date");
     const id = await insertId(db, "approvals", { org_id: req.user.org_id, vendor_id: vendor.id, market_id: market.id, market_date_id: market_date.id, booth_type, fee_cents, notes: req.body.notes });
+    // An event enrollment also makes this vendor available in the market CRM.
+    // The same vendor can therefore be enrolled and charged independently at
+    // any number of the organizer's markets.
+    const link = { org_id: req.user.org_id, vendor_id: vendor.id, market_id: market.id };
+    if (!await db("vendor_markets").where(link).first()) {
+      await db("vendor_markets").insert({ ...link, stage_override: "Applied" });
+    }
     res.status(201).json({ approval: approvalSummary(await db("approvals").where({ id }).first()) });
   })
 );
@@ -221,6 +228,50 @@ router.post(
     const approval = await approvalForOrg(req.user.org_id, req.params.id);
     await db("approvals").where({ id: approval.id }).update({ status: "paid", payment_method: req.body.payment_method, paid_at: new Date().toISOString(), payment_deadline_at: null, updated_at: new Date().toISOString() });
     res.json({ approval: approvalSummary(await db("approvals").where({ id: approval.id }).first()) });
+  })
+);
+
+// ---- expense ledger and financial reporting ----------------------------
+router.get(
+  "/expenses",
+  asyncHandler(async (req, res) => {
+    const marketId = optionalId(req.query.market_id);
+    if (marketId !== undefined) await marketForOrg(req.user.org_id, marketId);
+    const query = db("market_expenses").where({ org_id: req.user.org_id });
+    if (marketId !== undefined) query.andWhere({ market_id: marketId });
+    res.json({ expenses: await query.orderBy("expense_date", "desc").orderBy("id", "desc") });
+  })
+);
+
+router.post(
+  "/expenses",
+  canWrite,
+  validate(z.object({
+    market_id: z.number().int().positive(),
+    market_date_id: z.number().int().positive().nullable().optional(),
+    category: z.string().min(1).max(120),
+    amount_cents: z.number().int().positive(),
+    note: z.string().max(2000).optional().default(""),
+    expense_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })),
+  asyncHandler(async (req, res) => {
+    await marketForOrg(req.user.org_id, req.body.market_id);
+    if (req.body.market_date_id) {
+      const event = await dateForOrg(req.user.org_id, req.body.market_date_id);
+      if (event.market_id !== req.body.market_id) throw new ApiError(400, "The event date belongs to a different market");
+    }
+    const id = await insertId(db, "market_expenses", { ...req.body, org_id: req.user.org_id });
+    res.status(201).json({ expense: await db("market_expenses").where({ id }).first() });
+  })
+);
+
+router.delete(
+  "/expenses/:id",
+  canWrite,
+  asyncHandler(async (req, res) => {
+    const count = await db("market_expenses").where({ id: req.params.id, org_id: req.user.org_id }).del();
+    if (!count) throw new ApiError(404, "Expense not found");
+    res.json({ ok: true });
   })
 );
 

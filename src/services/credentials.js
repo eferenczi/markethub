@@ -7,7 +7,7 @@ const PROVIDERS = ["stripe", "sendgrid", "twilio"];
 const PROVIDER_FIELDS = {
   stripe: { fields: ["publishable_key", "secret_key", "webhook_secret"], secret: ["secret_key", "webhook_secret"] },
   sendgrid: { fields: ["api_key", "from_email"], secret: ["api_key"] },
-  twilio: { fields: ["account_sid", "auth_token", "from_number"], secret: ["auth_token"] },
+  twilio: { fields: ["account_sid", "auth_token", "from_number", "whatsapp_from"], secret: ["auth_token"] },
 };
 
 // Save (upsert) a provider's credentials for an org, encrypted at rest.

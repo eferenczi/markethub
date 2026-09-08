@@ -20,6 +20,7 @@ const vendorRoutes = require("./routes/vendors.routes");
 const webhookRoutes = require("./routes/webhooks.routes");
 const operationsRoutes = require("./routes/operations.routes");
 const applicationsRoutes = require("./routes/applications.routes");
+const campaignsRoutes = require("./routes/campaigns.routes");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -71,11 +72,12 @@ app.use("/markets", marketRoutes);
 app.use("/vendors", vendorRoutes);
 app.use("/operations", operationsRoutes);
 app.use("/applications", applicationsRoutes);
+app.use("/campaigns", campaignsRoutes.router);
 
 // Production deploys use one Render web service: Express serves both the API
 // and the compiled React app. Development continues to use Vite separately.
 const webDist = path.join(__dirname, "..", "dist");
-const apiPrefixes = ["/auth", "/org", "/settings", "/billing", "/markets", "/vendors", "/operations", "/applications", "/webhooks", "/health", "/ready"];
+const apiPrefixes = ["/auth", "/org", "/settings", "/billing", "/markets", "/vendors", "/operations", "/applications", "/campaigns", "/webhooks", "/health", "/ready"];
 if (fs.existsSync(webDist)) {
   app.use(express.static(webDist, { maxAge: config.env === "production" ? "1h" : 0, index: false }));
   // A regexp works in both Express 4 and 5; bare "*" is no longer valid in
@@ -95,6 +97,9 @@ if (require.main === module) {
     // eslint-disable-next-line no-console
     console.log(`MarketHub API listening on http://localhost:${config.port} (${config.env})`);
   });
+  const campaignTimer = setInterval(() => campaignsRoutes.processDueCampaigns().catch((error) => console.error("Campaign delivery error", error)), 60_000);
+  campaignTimer.unref();
+  campaignsRoutes.processDueCampaigns().catch((error) => console.error("Campaign delivery error", error));
 
   // Graceful shutdown: stop accepting connections, close the DB, then exit.
   const shutdown = (signal) => {

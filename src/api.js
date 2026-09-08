@@ -94,6 +94,9 @@ export const api = {
   approveApplication: (id) => request(`/operations/approvals/${id}/approve`, { method: "POST" }),
   sendPaymentReminder: (id) => request(`/operations/approvals/${id}/reminder`, { method: "POST" }),
   recordPayment: (id, payment_method) => request(`/operations/approvals/${id}/record-payment`, { method: "POST", body: { payment_method } }),
+  getExpenses: (marketId) => request(`/operations/expenses${marketId ? `?market_id=${marketId}` : ""}`),
+  createExpense: (body) => request("/operations/expenses", { method: "POST", body }),
+  deleteExpense: (id) => request(`/operations/expenses/${id}`, { method: "DELETE" }),
   getLayouts: (marketDateId) => request(`/operations/layouts?market_date_id=${marketDateId}`),
   createLayout: (body) => request("/operations/layouts", { method: "POST", body }),
   updateLayout: (id, body) => request(`/operations/layouts/${id}`, { method: "PUT", body }),
@@ -104,6 +107,13 @@ export const api = {
   updateApplication: (id, body) => request(`/applications/${id}`, { method: "PATCH", body }),
   getApplicationAsset: (applicationId, assetId) => requestFile(`/applications/${applicationId}/assets/${assetId}`),
   rotateApplicationLink: () => request("/applications/application-link/rotate", { method: "POST" }),
+  // campaigns and newsletters
+  getCampaigns: () => request("/campaigns"),
+  createCampaign: (body) => request("/campaigns", { method: "POST", body }),
+  launchCampaign: (id, marketId) => request(`/campaigns/${id}/launch${marketId ? `?market_id=${marketId}` : ""}`, { method: "POST" }),
+  getSubscribers: () => request("/campaigns/subscribers"),
+  createSubscriber: (body) => request("/campaigns/subscribers", { method: "POST", body }),
+  deleteSubscriber: (id) => request(`/campaigns/subscribers/${id}`, { method: "DELETE" }),
   // billing
   getBilling: () => request("/billing"),
   checkout: (plan_code) => request("/billing/checkout", { method: "POST", body: { plan_code } }),

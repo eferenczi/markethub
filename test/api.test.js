@@ -270,6 +270,8 @@ test("operations: market date, CRM link, approval, payment, and booth map persis
   });
   assert.equal(link.status, 200);
   assert.equal(link.body.vendor_market.stage_override, "Applied");
+  const removedLink = await api(`/operations/vendor-markets/${vendor.id}/${market.id}`, { method: "DELETE", token });
+  assert.equal(removedLink.status, 200);
 
   const approval = await api("/operations/approvals", {
     method: "POST",
@@ -279,6 +281,9 @@ test("operations: market date, CRM link, approval, payment, and booth map persis
   assert.equal(approval.status, 201);
   assert.equal(approval.body.approval.status, "pending");
   assert.ok(approval.body.approval.amount_due_cents > 0);
+  const autoLink = await api(`/operations/vendor-markets?vendor_id=${vendor.id}&market_id=${market.id}`, { token });
+  assert.equal(autoLink.status, 200);
+  assert.equal(autoLink.body.vendor_markets.length, 1, "event enrollment links a vendor to the market CRM");
 
   const approved = await api(`/operations/approvals/${approval.body.approval.id}/approve`, { method: "POST", token });
   assert.equal(approved.status, 200);
@@ -312,6 +317,15 @@ test("operations: market date, CRM link, approval, payment, and booth map persis
   const list = await api(`/operations/approvals?market_date_id=${date.body.market_date.id}`, { token });
   assert.equal(list.status, 200);
   assert.equal(list.body.approvals[0].status, "paid");
+
+  const expense = await api("/operations/expenses", {
+    method: "POST",
+    token,
+    body: { market_id: market.id, market_date_id: date.body.market_date.id, category: "Permit", amount_cents: 12500, expense_date: "2026-10-01" },
+  });
+  assert.equal(expense.status, 201);
+  const expenses = await api(`/operations/expenses?market_id=${market.id}`, { token });
+  assert.equal(expenses.body.expenses[0].amount_cents, 12500);
 });
 
 test("vendor applications save contact details, uploads, and CRM review status", async () => {
@@ -371,4 +385,18 @@ test("vendor applications save contact details, uploads, and CRM review status",
   assert.equal(reviewed.body.application.status, "approved");
   const vendor = await db("vendors").where({ id: application.vendor_id }).first();
   assert.equal(vendor.stage, "Approved");
+});
+
+test("campaigns and newsletter contacts persist without sending messages", async () => {
+  const token = await loginDemo();
+  const subscriber = await api("/campaigns/subscribers", { method: "POST", token, body: { name: "Market Friend", email: "friend@example.test" } });
+  assert.equal(subscriber.status, 201);
+  const campaign = await api("/campaigns", {
+    method: "POST",
+    token,
+    body: { name: "Sunday Market Update", audience: "all", steps: [{ channel: "email", subject: "See you Sunday", body: "Fresh vendors and food trucks.", delay_hours: 0 }, { channel: "sms", body: "Reminder: market opens tomorrow.", delay_hours: 24 }] },
+  });
+  assert.equal(campaign.status, 201);
+  const list = await api("/campaigns", { token });
+  assert.ok(list.body.campaigns.some((item) => item.name === "Sunday Market Update" && item.steps.length === 2));
 });

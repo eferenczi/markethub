@@ -18,10 +18,11 @@ async function test(orgId) {
 }
 
 // Send an SMS (reminders, day-of alerts) from the org's own Twilio number.
-async function send(orgId, { to, body }) {
+async function send(orgId, { to, body, whatsapp = false }) {
   const { client, creds } = await clientFor(orgId);
-  if (!creds.from_number) throw new ApiError(400, "No Twilio from-number configured");
-  return client.messages.create({ to, from: creds.from_number, body });
+  const from = whatsapp ? creds.whatsapp_from : creds.from_number;
+  if (!from) throw new ApiError(400, whatsapp ? "No Twilio WhatsApp sender configured" : "No Twilio from-number configured");
+  return client.messages.create({ to: whatsapp && !to.startsWith("whatsapp:") ? `whatsapp:${to}` : to, from: whatsapp && !from.startsWith("whatsapp:") ? `whatsapp:${from}` : from, body });
 }
 
 module.exports = { test, send };
