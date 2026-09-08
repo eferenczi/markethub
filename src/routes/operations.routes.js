@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const express = require("express");
 const { z } = require("zod");
 const db = require("../db");
@@ -197,6 +198,22 @@ router.patch(
         .where({ id: market_date.id })
         .first(),
     });
+  }),
+);
+
+router.post(
+  "/market-dates/:id/board-link",
+  canWrite,
+  asyncHandler(async (req, res) => {
+    const marketDate = await dateForOrg(req.user.org_id, req.params.id);
+    const manager_board_key =
+      marketDate.manager_board_key ||
+      crypto.randomBytes(18).toString("base64url");
+    if (!marketDate.manager_board_key)
+      await db("market_dates")
+        .where({ id: marketDate.id })
+        .update({ manager_board_key });
+    res.json({ key: manager_board_key });
   }),
 );
 

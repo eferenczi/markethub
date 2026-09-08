@@ -22,27 +22,44 @@ const operationsRoutes = require("./routes/operations.routes");
 const applicationsRoutes = require("./routes/applications.routes");
 const campaignsRoutes = require("./routes/campaigns.routes");
 const templatesRoutes = require("./routes/templates.routes");
+const publicRoutes = require("./routes/public.routes");
 
 const app = express();
 app.set("trust proxy", 1);
 app.use(helmet());
 // Native (Capacitor) apps send these origins; allow them alongside your web URLs.
-const NATIVE_ORIGINS = ["capacitor://localhost", "ionic://localhost", "http://localhost", "https://localhost"];
+const NATIVE_ORIGINS = [
+  "capacitor://localhost",
+  "ionic://localhost",
+  "http://localhost",
+  "https://localhost",
+];
 app.use(
   cors({
     origin(origin, cb) {
       // Allow same-origin/no-origin (curl, mobile apps) and configured front-ends.
-      if (!origin || config.corsOrigins.includes(origin) || NATIVE_ORIGINS.includes(origin)) return cb(null, true);
+      if (
+        !origin ||
+        config.corsOrigins.includes(origin) ||
+        NATIVE_ORIGINS.includes(origin)
+      )
+        return cb(null, true);
       return cb(new Error("Not allowed by CORS"));
     },
     credentials: true,
-  })
+  }),
 );
 if (config.env !== "test") app.use(morgan("dev"));
 
 // Rate limiting protects against brute-force and abuse. Disabled under test.
 const skipInTest = () => config.env === "test";
-const globalLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false, skip: skipInTest });
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipInTest,
+});
 app.use(globalLimiter);
 
 // Webhooks need the raw body, so mount them BEFORE the JSON body parser.
@@ -52,10 +69,22 @@ app.use("/webhooks", webhookRoutes);
 app.use(express.json({ limit: "18mb" }));
 
 // Throttle auth endpoints harder to slow down credential-stuffing.
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50, standardHeaders: true, legacyHeaders: false, skip: skipInTest });
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipInTest,
+});
 
 // Liveness: is the process up? Readiness: can it reach the database?
-app.get("/health", (req, res) => res.json({ ok: true, service: "markethub-api", time: new Date().toISOString() }));
+app.get("/health", (req, res) =>
+  res.json({
+    ok: true,
+    service: "markethub-api",
+    time: new Date().toISOString(),
+  }),
+);
 app.get("/ready", async (req, res) => {
   try {
     await db.raw("select 1");
@@ -75,17 +104,43 @@ app.use("/operations", operationsRoutes);
 app.use("/applications", applicationsRoutes);
 app.use("/campaigns", campaignsRoutes.router);
 app.use("/templates", templatesRoutes);
+app.use("/public", publicRoutes.router);
 
 // Production deploys use one Render web service: Express serves both the API
 // and the compiled React app. Development continues to use Vite separately.
 const webDist = path.join(__dirname, "..", "dist");
-const apiPrefixes = ["/auth", "/org", "/settings", "/billing", "/markets", "/vendors", "/operations", "/applications", "/campaigns", "/templates", "/webhooks", "/health", "/ready"];
+const apiPrefixes = [
+  "/auth",
+  "/org",
+  "/settings",
+  "/billing",
+  "/markets",
+  "/vendors",
+  "/operations",
+  "/applications",
+  "/campaigns",
+  "/templates",
+  "/public",
+  "/webhooks",
+  "/health",
+  "/ready",
+];
 if (fs.existsSync(webDist)) {
-  app.use(express.static(webDist, { maxAge: config.env === "production" ? "1h" : 0, index: false }));
+  app.use(
+    express.static(webDist, {
+      maxAge: config.env === "production" ? "1h" : 0,
+      index: false,
+    }),
+  );
   // A regexp works in both Express 4 and 5; bare "*" is no longer valid in
   // Express 5's route parser.
   app.get(/.*/, (req, res, next) => {
-    if (apiPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`))) return next();
+    if (
+      apiPrefixes.some(
+        (prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`),
+      )
+    )
+      return next();
     return res.sendFile(path.join(webDist, "index.html"));
   });
 }
@@ -97,11 +152,21 @@ if (require.main === module) {
   initObservability();
   const server = app.listen(config.port, () => {
     // eslint-disable-next-line no-console
-    console.log(`MarketHub API listening on http://localhost:${config.port} (${config.env})`);
+    console.log(
+      `MarketHub API listening on http://localhost:${config.port} (${config.env})`,
+    );
   });
-  const campaignTimer = setInterval(() => campaignsRoutes.processDueCampaigns().catch((error) => console.error("Campaign delivery error", error)), 60_000);
+  const campaignTimer = setInterval(
+    () =>
+      campaignsRoutes
+        .processDueCampaigns()
+        .catch((error) => console.error("Campaign delivery error", error)),
+    60_000,
+  );
   campaignTimer.unref();
-  campaignsRoutes.processDueCampaigns().catch((error) => console.error("Campaign delivery error", error));
+  campaignsRoutes
+    .processDueCampaigns()
+    .catch((error) => console.error("Campaign delivery error", error));
 
   // Graceful shutdown: stop accepting connections, close the DB, then exit.
   const shutdown = (signal) => {

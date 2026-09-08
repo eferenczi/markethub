@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   Check,
+  Copy,
   CreditCard,
   DollarSign,
   Grip,
@@ -392,6 +393,173 @@ function Payments({ approvals, vendors, dateId, canWrite, refresh, notify }) {
           </article>
         );
       })}
+    </div>
+  );
+}
+
+function BoothAssignments({ dateId, approvals, canWrite, notify }) {
+  const [spots, setSpots] = useState(null);
+  const [boardUrl, setBoardUrl] = useState("");
+  useEffect(() => {
+    api
+      .getLayouts(dateId)
+      .then((result) => setSpots(result.layouts[0]?.spots || []))
+      .catch((error) => notify(error.message, "err"));
+  }, [dateId]);
+  const copyBoard = async () => {
+    try {
+      const result = await api.getEventBoardLink(dateId);
+      const url = `${window.location.origin}${window.location.pathname}#/event-board/${result.key}`;
+      setBoardUrl(url);
+      await navigator.clipboard.writeText(url);
+      notify("Live team event board link copied");
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  };
+  if (!spots)
+    return (
+      <div style={{ color: C.sub }} className="py-6 text-[13px]">
+        <Loader2 size={15} className="inline animate-spin mr-2" />
+        Loading assignments…
+      </div>
+    );
+  const byVendor = new Map();
+  for (const spot of spots)
+    if (spot.vendor_id)
+      byVendor.set(spot.vendor_id, [
+        ...(byVendor.get(spot.vendor_id) || []),
+        spot,
+      ]);
+  return (
+    <div className="flex flex-col gap-3">
+      <section
+        style={{ background: C.card, border: `1px solid ${C.line}` }}
+        className="rounded-2xl p-4 flex flex-wrap gap-2 items-center"
+      >
+        <div className="flex-1">
+          <p style={{ fontFamily: FD }} className="text-[18px] font-semibold">
+            Booth assignments
+          </p>
+          <p style={{ color: C.sub }} className="text-[11.5px]">
+            Spot assignments and payment follow-up for this event.
+          </p>
+        </div>
+        {canWrite && (
+          <button
+            onClick={copyBoard}
+            style={{ background: C.pine, color: "#fff" }}
+            className="px-3 py-2 rounded-lg text-[12px] font-bold flex gap-1 items-center"
+          >
+            <Copy size={13} /> Copy live team board
+          </button>
+        )}
+      </section>
+      {boardUrl && (
+        <p
+          style={{ background: C.sageSoft, color: C.pine }}
+          className="rounded-lg px-3 py-2 text-[11.5px] break-all"
+        >
+          {boardUrl}
+        </p>
+      )}
+      <section
+        style={{ background: C.card, border: `1px solid ${C.line}` }}
+        className="rounded-2xl overflow-hidden"
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-[12px]">
+            <thead
+              style={{ background: C.paper2, color: C.sub }}
+              className="text-[10px] uppercase"
+            >
+              <tr>
+                {["Vendor", "Setup", "Assigned spot", "Collection"].map(
+                  (label) => (
+                    <th key={label} className="px-4 py-3">
+                      {label}
+                    </th>
+                  ),
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {approvals.map((approval) => {
+                const assigned = byVendor.get(approval.vendor_id) || [];
+                const collect = [
+                  "pending",
+                  "awaiting_payment",
+                  "held",
+                ].includes(approval.status);
+                return (
+                  <tr
+                    key={approval.id}
+                    style={{ borderTop: `1px solid ${C.line}` }}
+                  >
+                    <td className="px-4 py-3">
+                      <p className="font-semibold">{approval.business_name}</p>
+                      <p style={{ color: C.sub }}>
+                        {approval.contact_name || approval.email || "—"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 capitalize">
+                      {approval.booth_type}
+                    </td>
+                    <td className="px-4 py-3">
+                      {assigned.length ? (
+                        assigned.map((spot) => (
+                          <span
+                            key={spot.code}
+                            style={{ background: C.sageSoft, color: C.pine }}
+                            className="inline-block mr-1 px-2 py-1 rounded font-bold"
+                          >
+                            {spot.code}
+                          </span>
+                        ))
+                      ) : (
+                        <span style={{ color: C.honeyDeep }}>Unassigned</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-bold">
+                        $
+                        {(Number(approval.amount_due_cents || 0) / 100).toFixed(
+                          2,
+                        )}
+                      </p>
+                      <span
+                        style={{
+                          color: collect
+                            ? C.honeyDeep
+                            : approval.status === "paid"
+                              ? C.pine
+                              : C.sub,
+                        }}
+                        className="font-semibold capitalize"
+                      >
+                        {collect
+                          ? "Payment needed"
+                          : approval.status.replaceAll("_", " ")}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {approvals.length === 0 && (
+                <tr>
+                  <td
+                    colSpan="4"
+                    style={{ color: C.faint }}
+                    className="px-4 py-8 text-center"
+                  >
+                    No vendors assigned to this event.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1059,6 +1227,7 @@ export default function EventHub({ canWrite, notify }) {
           >
             {[
               ["payments", "Approvals & payments", CreditCard],
+              ["assignments", "Assignments", MapPinned],
               ["map", "Booth map", MapPinned],
               ["questions", "Questions", Send],
               ["downloads", "Download", DollarSign],
@@ -1083,6 +1252,13 @@ export default function EventHub({ canWrite, notify }) {
               dateId={dateId}
               canWrite={canWrite}
               refresh={refreshApprovals}
+              notify={notify}
+            />
+          ) : view === "assignments" ? (
+            <BoothAssignments
+              dateId={dateId}
+              approvals={scopedApprovals}
+              canWrite={canWrite}
               notify={notify}
             />
           ) : view === "map" ? (

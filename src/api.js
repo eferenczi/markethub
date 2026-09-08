@@ -118,6 +118,8 @@ export const api = {
     request("/operations/market-dates", { method: "POST", body }),
   updateMarketDate: (id, body) =>
     request(`/operations/market-dates/${id}`, { method: "PATCH", body }),
+  getEventBoardLink: (id) =>
+    request(`/operations/market-dates/${id}/board-link`, { method: "POST" }),
   getVendorMarkets: (params = {}) => {
     const q = new URLSearchParams(
       Object.entries(params).filter(
@@ -209,6 +211,12 @@ export const api = {
       body: { answers },
       auth: false,
     }),
+  getPublicEventBoard: (key) =>
+    request(`/public/event-board/${key}`, { auth: false }),
+  getPublicSubscribe: (key) =>
+    request(`/public/subscribe/${key}`, { auth: false }),
+  submitPublicSubscribe: (key, body) =>
+    request(`/public/subscribe/${key}`, { method: "POST", body, auth: false }),
   // public vendor applications + organizer review CRM
   getPublicApplication: (key) =>
     request(`/applications/public/${key}`, { auth: false }),
@@ -237,6 +245,7 @@ export const api = {
       { method: "POST" },
     ),
   getSubscribers: () => request("/campaigns/subscribers"),
+  getCampaignPublicLinks: () => request("/campaigns/public-links"),
   createSubscriber: (body) =>
     request("/campaigns/subscribers", { method: "POST", body }),
   deleteSubscriber: (id) =>

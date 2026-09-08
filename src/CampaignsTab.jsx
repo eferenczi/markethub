@@ -1,25 +1,683 @@
 import React, { useEffect, useState } from "react";
-import { Check, Loader2, Mail, MessageCircle, Plus, Send, Trash2, Users } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Loader2,
+  Mail,
+  MessageCircle,
+  Plus,
+  Send,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { api } from "./api";
 import { C, FD } from "./theme";
 
 const inp = { background: C.card, border: `1px solid ${C.line}`, color: C.ink };
-const emptyStep = () => ({ channel: "email", subject: "", body: "", delay_hours: 0 });
+const emptyStep = () => ({
+  channel: "email",
+  subject: "",
+  body: "",
+  delay_hours: 0,
+  design: {
+    heading: "",
+    accent_color: "#1f5a4c",
+    cta_label: "",
+    cta_url: "",
+  },
+});
 const icon = { email: Mail, sms: MessageCircle, whatsapp: MessageCircle };
 
 export default function CampaignsTab({ canWrite, notify }) {
-  const [campaigns, setCampaigns] = useState(null); const [subscribers, setSubscribers] = useState(null); const [markets, setMarkets] = useState([]); const [busy, setBusy] = useState("");
-  const [form, setForm] = useState({ name: "", audience: "vendors", market_id: "", steps: [emptyStep()] }); const [subscriber, setSubscriber] = useState({ name: "", email: "", phone: "" });
-  const load = async () => { try { const [campaignResult, subscriberResult, marketResult] = await Promise.all([api.getCampaigns(), api.getSubscribers(), api.getMarkets()]); setCampaigns(campaignResult.campaigns); setSubscribers(subscriberResult.subscribers); setMarkets(marketResult.markets.filter((market) => !market.archived)); } catch (error) { notify(error.message, "err"); } };
-  useEffect(() => { load(); }, []);
-  const patchStep = (index, patch) => setForm((previous) => ({ ...previous, steps: previous.steps.map((step, i) => i === index ? { ...step, ...patch } : step) }));
-  const create = async () => { if (!form.name.trim() || form.steps.some((step) => !step.body.trim())) return notify("Give the campaign a name and a message", "err"); setBusy("create"); try { await api.createCampaign({ ...form, name: form.name.trim(), market_id: form.market_id ? Number(form.market_id) : null, steps: form.steps.map((step) => ({ ...step, delay_hours: Number(step.delay_hours || 0) })) }); setForm({ name: "", audience: "vendors", market_id: "", steps: [emptyStep()] }); notify("Campaign saved as a draft"); await load(); } catch (error) { notify(error.message, "err"); } finally { setBusy(""); } };
-  const launch = async (campaign) => { if (!window.confirm(`Queue this campaign for delivery? Messages with a delay will be sent later; messages with no delay will send within one minute.`)) return; setBusy(`launch-${campaign.id}`); try { const result = await api.launchCampaign(campaign.id); notify(`${result.queued} messages queued for delivery`); await load(); } catch (error) { notify(error.message, "err"); } finally { setBusy(""); } };
-  const addSubscriber = async () => { if (!subscriber.email && !subscriber.phone) return notify("Enter an email address or phone number", "err"); setBusy("subscriber"); try { await api.createSubscriber(subscriber); setSubscriber({ name: "", email: "", phone: "" }); notify("Newsletter contact added"); await load(); } catch (error) { notify(error.message, "err"); } finally { setBusy(""); } };
-  const removeSubscriber = async (id) => { try { await api.deleteSubscriber(id); notify("Newsletter contact removed"); await load(); } catch (error) { notify(error.message, "err"); } };
-  if (!campaigns || !subscribers) return <div style={{ color: C.sub }} className="py-8"><Loader2 size={16} className="inline animate-spin mr-2" />Loading campaigns…</div>;
-  return <div className="grid xl:grid-cols-[1.3fr_.7fr] gap-5"><div className="flex flex-col gap-4"><section style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-5"><div className="flex items-center gap-2"><div style={{ background: C.berrySoft }} className="w-9 h-9 rounded-xl flex items-center justify-center"><Send size={17} color={C.berry} /></div><div><p style={{ fontFamily: FD }} className="text-[19px] font-semibold">Campaign composer</p><p style={{ color: C.sub }} className="text-[12px]">Create a broadcast or a multi-step email, text, or WhatsApp drip.</p></div></div><div className="grid sm:grid-cols-3 gap-2 mt-4"><input value={form.name} onChange={(event) => setForm((previous) => ({ ...previous, name: event.target.value }))} placeholder="Campaign name" style={inp} className="sm:col-span-2 px-3 py-2.5 rounded-lg text-[13px] outline-none" /><select value={form.audience} onChange={(event) => setForm((previous) => ({ ...previous, audience: event.target.value }))} style={inp} className="px-3 py-2.5 rounded-lg text-[13px] outline-none"><option value="vendors">Vendors</option><option value="customers">Newsletter customers</option><option value="all">Vendors + customers</option></select><select value={form.market_id} onChange={(event) => setForm((previous) => ({ ...previous, market_id: event.target.value }))} style={inp} className="sm:col-span-3 px-3 py-2.5 rounded-lg text-[13px] outline-none"><option value="">All markets (where applicable)</option>{markets.map((market) => <option key={market.id} value={market.id}>{market.name}</option>)}</select></div><div className="flex flex-col gap-3 mt-4">{form.steps.map((step, index) => { const Icon = icon[step.channel]; return <div key={index} style={{ background: C.paper2, border: `1px solid ${C.line}` }} className="rounded-xl p-3"><div className="flex gap-2"><select value={step.channel} onChange={(event) => patchStep(index, { channel: event.target.value })} style={inp} className="px-2 py-2 rounded-lg text-[12px] outline-none"><option value="email">Email</option><option value="sms">Text message</option><option value="whatsapp">WhatsApp</option></select><div style={{ color: C.sub }} className="px-2 py-2 text-[12px] flex items-center gap-1"><Icon size={14} /> Step {index + 1}</div><input type="number" min="0" value={step.delay_hours} onChange={(event) => patchStep(index, { delay_hours: event.target.value })} placeholder="Delay hours" style={inp} className="ml-auto w-28 px-2 py-2 rounded-lg text-[12px] outline-none" /></div>{step.channel === "email" && <input value={step.subject} onChange={(event) => patchStep(index, { subject: event.target.value })} placeholder="Email subject" style={inp} className="mt-2 w-full px-3 py-2 rounded-lg text-[12.5px] outline-none" />}<textarea value={step.body} onChange={(event) => patchStep(index, { body: event.target.value })} rows={3} placeholder="Write your message…" style={inp} className="mt-2 w-full px-3 py-2 rounded-lg text-[12.5px] outline-none resize-y" />{form.steps.length > 1 && <button onClick={() => setForm((previous) => ({ ...previous, steps: previous.steps.filter((_, i) => i !== index) }))} style={{ color: C.danger }} className="mt-1 text-[11px] font-bold">Remove step</button>}</div>; })}</div><div className="flex gap-2 mt-3"><button onClick={() => setForm((previous) => ({ ...previous, steps: [...previous.steps, { ...emptyStep(), delay_hours: 24 }] }))} style={{ background: C.paper2, color: C.pine }} className="px-3 py-2 rounded-lg text-[12px] font-bold flex items-center gap-1"><Plus size={14} /> Add drip step</button><button onClick={create} disabled={busy === "create"} style={{ background: C.pine, color: "#fff" }} className="ml-auto px-4 py-2 rounded-lg text-[12px] font-bold flex items-center gap-1">{busy === "create" ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Save draft</button></div></section>
-    <section className="flex flex-col gap-3">{campaigns.length === 0 && <p style={{ color: C.faint }} className="text-center py-5 text-[13px]">No campaigns yet.</p>}{campaigns.map((campaign) => <article key={campaign.id} style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-4"><div className="flex items-start gap-3"><div className="flex-1"><p style={{ fontFamily: FD }} className="text-[18px] font-semibold">{campaign.name}</p><p style={{ color: C.sub }} className="text-[12px]">{campaign.audience} · {campaign.steps.length} step{campaign.steps.length === 1 ? "" : "s"} · {campaign.status}</p><p style={{ color: C.faint }} className="text-[11.5px] mt-1">{campaign.steps.map((step) => `${step.channel}${step.delay_hours ? ` +${step.delay_hours}h` : ""}`).join(" → ")}</p></div><button onClick={() => launch(campaign)} disabled={busy === `launch-${campaign.id}`} style={{ background: C.honey, color: C.pineDeep }} className="px-3 py-2 rounded-lg text-[11.5px] font-bold flex items-center gap-1">{busy === `launch-${campaign.id}` ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Launch</button></div>{Object.keys(campaign.delivery_counts || {}).length > 0 && <div style={{ background: C.paper2, color: C.sub }} className="mt-3 px-3 py-2 rounded-lg text-[11px] font-semibold">{Object.entries(campaign.delivery_counts).map(([status, count]) => `${count} ${status}`).join(" · ")}</div>}</article>)}</section></div>
-    <aside style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-4 self-start"><div className="flex items-center gap-2"><Users size={17} color={C.pine} /><div><p style={{ fontFamily: FD }} className="text-[17px] font-semibold">Newsletter list</p><p style={{ color: C.sub }} className="text-[11.5px]">Customers and community contacts</p></div></div>{canWrite && <div className="flex flex-col gap-2 mt-4"><input value={subscriber.name} onChange={(event) => setSubscriber((previous) => ({ ...previous, name: event.target.value }))} placeholder="Name" style={inp} className="px-3 py-2 rounded-lg text-[12.5px] outline-none" /><input value={subscriber.email} onChange={(event) => setSubscriber((previous) => ({ ...previous, email: event.target.value }))} placeholder="Email (optional)" style={inp} className="px-3 py-2 rounded-lg text-[12.5px] outline-none" /><input value={subscriber.phone} onChange={(event) => setSubscriber((previous) => ({ ...previous, phone: event.target.value }))} placeholder="Mobile (optional)" style={inp} className="px-3 py-2 rounded-lg text-[12.5px] outline-none" /><button onClick={addSubscriber} disabled={busy === "subscriber"} style={{ background: C.pine, color: "#fff" }} className="px-3 py-2 rounded-lg text-[12px] font-bold">Add contact</button></div>}<div className="flex flex-col gap-1.5 mt-4">{subscribers.length === 0 && <p style={{ color: C.faint }} className="text-[12px]">No newsletter contacts yet.</p>}{subscribers.map((item) => <div key={item.id} style={{ background: C.paper2 }} className="rounded-lg p-2 flex gap-2 items-center"><div className="flex-1 min-w-0"><p className="text-[12px] font-semibold truncate">{item.name || "Subscriber"}</p><p style={{ color: C.sub }} className="text-[10.5px] truncate">{item.email || item.phone}</p></div>{canWrite && <button onClick={() => removeSubscriber(item.id)} style={{ color: C.danger }}><Trash2 size={13} /></button>}</div>)}</div></aside>
-  </div>;
+  const [campaigns, setCampaigns] = useState(null);
+  const [subscribers, setSubscribers] = useState(null);
+  const [markets, setMarkets] = useState([]);
+  const [publicLinks, setPublicLinks] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    audience: "vendors",
+    market_id: "",
+    steps: [emptyStep()],
+  });
+  const [subscriber, setSubscriber] = useState({
+    name: "",
+    email: "",
+    phone: "",
+  });
+  const load = async () => {
+    try {
+      const [campaignResult, subscriberResult, marketResult, linkResult] =
+        await Promise.all([
+          api.getCampaigns(),
+          api.getSubscribers(),
+          api.getMarkets(),
+          api.getCampaignPublicLinks(),
+        ]);
+      setCampaigns(campaignResult.campaigns);
+      setSubscribers(subscriberResult.subscribers);
+      setMarkets(marketResult.markets.filter((market) => !market.archived));
+      setPublicLinks(linkResult);
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  };
+  useEffect(() => {
+    load();
+  }, []);
+  const patchStep = (index, patch) =>
+    setForm((previous) => ({
+      ...previous,
+      steps: previous.steps.map((step, i) =>
+        i === index ? { ...step, ...patch } : step,
+      ),
+    }));
+  const create = async () => {
+    if (!form.name.trim() || form.steps.some((step) => !step.body.trim()))
+      return notify("Give the campaign a name and a message", "err");
+    setBusy("create");
+    try {
+      await api.createCampaign({
+        ...form,
+        name: form.name.trim(),
+        market_id: form.market_id ? Number(form.market_id) : null,
+        steps: form.steps.map((step) => ({
+          ...step,
+          delay_hours: Number(step.delay_hours || 0),
+        })),
+      });
+      setForm({
+        name: "",
+        audience: "vendors",
+        market_id: "",
+        steps: [emptyStep()],
+      });
+      notify("Campaign saved as a draft");
+      await load();
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      setBusy("");
+    }
+  };
+  const launch = async (campaign) => {
+    if (
+      !window.confirm(
+        `Queue this campaign for delivery? Messages with a delay will be sent later; messages with no delay will send within one minute.`,
+      )
+    )
+      return;
+    setBusy(`launch-${campaign.id}`);
+    try {
+      const result = await api.launchCampaign(campaign.id);
+      notify(`${result.queued} messages queued for delivery`);
+      await load();
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      setBusy("");
+    }
+  };
+  const addSubscriber = async () => {
+    if (!subscriber.email && !subscriber.phone)
+      return notify("Enter an email address or phone number", "err");
+    setBusy("subscriber");
+    try {
+      await api.createSubscriber(subscriber);
+      setSubscriber({ name: "", email: "", phone: "" });
+      notify("Newsletter contact added");
+      await load();
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      setBusy("");
+    }
+  };
+  const removeSubscriber = async (id) => {
+    try {
+      await api.deleteSubscriber(id);
+      notify("Newsletter contact removed");
+      await load();
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  };
+  const publicUrl = (type, key) =>
+    `${window.location.origin}${window.location.pathname}#/${type}/${key}`;
+  const copyLink = async (label, url) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      notify(`${label} link copied`);
+    } catch {
+      notify(`Copy this link: ${url}`, "err");
+    }
+  };
+  if (!campaigns || !subscribers)
+    return (
+      <div style={{ color: C.sub }} className="py-8">
+        <Loader2 size={16} className="inline animate-spin mr-2" />
+        Loading campaigns…
+      </div>
+    );
+  return (
+    <div className="grid xl:grid-cols-[1.3fr_.7fr] gap-5">
+      <div className="flex flex-col gap-4">
+        <section
+          style={{ background: C.card, border: `1px solid ${C.line}` }}
+          className="rounded-2xl p-5"
+        >
+          <div className="flex items-center gap-2">
+            <div
+              style={{ background: C.berrySoft }}
+              className="w-9 h-9 rounded-xl flex items-center justify-center"
+            >
+              <Send size={17} color={C.berry} />
+            </div>
+            <div>
+              <p
+                style={{ fontFamily: FD }}
+                className="text-[19px] font-semibold"
+              >
+                Campaign composer
+              </p>
+              <p style={{ color: C.sub }} className="text-[12px]">
+                Create a broadcast or a multi-step email, text, or WhatsApp
+                drip.
+              </p>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-2 mt-4">
+            <input
+              value={form.name}
+              onChange={(event) =>
+                setForm((previous) => ({
+                  ...previous,
+                  name: event.target.value,
+                }))
+              }
+              placeholder="Campaign name"
+              style={inp}
+              className="sm:col-span-2 px-3 py-2.5 rounded-lg text-[13px] outline-none"
+            />
+            <select
+              value={form.audience}
+              onChange={(event) =>
+                setForm((previous) => ({
+                  ...previous,
+                  audience: event.target.value,
+                }))
+              }
+              style={inp}
+              className="px-3 py-2.5 rounded-lg text-[13px] outline-none"
+            >
+              <option value="vendors">Vendors</option>
+              <option value="market_participants">
+                Vendors who participated in a selected market
+              </option>
+              <option value="customers">Newsletter customers</option>
+              <option value="all">Vendors + customers</option>
+            </select>
+            <select
+              value={form.market_id}
+              onChange={(event) =>
+                setForm((previous) => ({
+                  ...previous,
+                  market_id: event.target.value,
+                }))
+              }
+              style={inp}
+              className="sm:col-span-3 px-3 py-2.5 rounded-lg text-[13px] outline-none"
+            >
+              <option value="">
+                {form.audience === "market_participants"
+                  ? "Choose the market that participated"
+                  : "All markets (where applicable)"}
+              </option>
+              {markets.map((market) => (
+                <option key={market.id} value={market.id}>
+                  {market.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-3 mt-4">
+            {form.steps.map((step, index) => {
+              const Icon = icon[step.channel];
+              return (
+                <div
+                  key={index}
+                  style={{
+                    background: C.paper2,
+                    border: `1px solid ${C.line}`,
+                  }}
+                  className="rounded-xl p-3"
+                >
+                  <div className="flex gap-2">
+                    <select
+                      value={step.channel}
+                      onChange={(event) =>
+                        patchStep(index, { channel: event.target.value })
+                      }
+                      style={inp}
+                      className="px-2 py-2 rounded-lg text-[12px] outline-none"
+                    >
+                      <option value="email">Email</option>
+                      <option value="sms">Text message</option>
+                      <option value="whatsapp">WhatsApp</option>
+                    </select>
+                    <div
+                      style={{ color: C.sub }}
+                      className="px-2 py-2 text-[12px] flex items-center gap-1"
+                    >
+                      <Icon size={14} /> Step {index + 1}
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      value={step.delay_hours}
+                      onChange={(event) =>
+                        patchStep(index, { delay_hours: event.target.value })
+                      }
+                      placeholder="Delay hours"
+                      style={inp}
+                      className="ml-auto w-28 px-2 py-2 rounded-lg text-[12px] outline-none"
+                    />
+                  </div>
+                  {step.channel === "email" && (
+                    <>
+                      <input
+                        value={step.subject}
+                        onChange={(event) =>
+                          patchStep(index, { subject: event.target.value })
+                        }
+                        placeholder="Email subject"
+                        style={inp}
+                        className="mt-2 w-full px-3 py-2 rounded-lg text-[12.5px] outline-none"
+                      />
+                      <div className="grid sm:grid-cols-[1fr_auto] gap-2 mt-2">
+                        <input
+                          value={step.design?.heading || ""}
+                          onChange={(event) =>
+                            patchStep(index, {
+                              design: {
+                                ...step.design,
+                                heading: event.target.value,
+                              },
+                            })
+                          }
+                          placeholder="Newsletter headline (optional)"
+                          style={inp}
+                          className="px-3 py-2 rounded-lg text-[12.5px] outline-none"
+                        />
+                        <label
+                          style={{
+                            background: C.card,
+                            border: `1px solid ${C.line}`,
+                          }}
+                          className="rounded-lg px-2 flex items-center gap-2 text-[11px] font-semibold"
+                        >
+                          Brand color
+                          <input
+                            type="color"
+                            value={step.design?.accent_color || "#1f5a4c"}
+                            onChange={(event) =>
+                              patchStep(index, {
+                                design: {
+                                  ...step.design,
+                                  accent_color: event.target.value,
+                                },
+                              })
+                            }
+                            className="w-7 h-7 bg-transparent"
+                          />
+                        </label>
+                      </div>
+                    </>
+                  )}
+                  <textarea
+                    value={step.body}
+                    onChange={(event) =>
+                      patchStep(index, { body: event.target.value })
+                    }
+                    rows={3}
+                    placeholder="Write your message…"
+                    style={inp}
+                    className="mt-2 w-full px-3 py-2 rounded-lg text-[12.5px] outline-none resize-y"
+                  />
+                  {step.channel === "email" && (
+                    <>
+                      <div className="grid sm:grid-cols-2 gap-2 mt-2">
+                        <input
+                          value={step.design?.cta_label || ""}
+                          onChange={(event) =>
+                            patchStep(index, {
+                              design: {
+                                ...step.design,
+                                cta_label: event.target.value,
+                              },
+                            })
+                          }
+                          placeholder="Button label (optional)"
+                          style={inp}
+                          className="px-3 py-2 rounded-lg text-[12.5px] outline-none"
+                        />
+                        <input
+                          value={step.design?.cta_url || ""}
+                          onChange={(event) =>
+                            patchStep(index, {
+                              design: {
+                                ...step.design,
+                                cta_url: event.target.value,
+                              },
+                            })
+                          }
+                          placeholder="Button link, https://..."
+                          style={inp}
+                          className="px-3 py-2 rounded-lg text-[12.5px] outline-none"
+                        />
+                      </div>
+                      <div
+                        style={{
+                          background: "#f5f2ec",
+                          border: `1px solid ${C.line}`,
+                        }}
+                        className="mt-3 rounded-xl overflow-hidden p-3"
+                      >
+                        <p
+                          style={{ color: C.sub }}
+                          className="text-[10px] font-bold uppercase tracking-wider mb-2"
+                        >
+                          Newsletter preview
+                        </p>
+                        <div
+                          style={{ background: C.card }}
+                          className="rounded-lg overflow-hidden shadow-sm"
+                        >
+                          <div
+                            style={{
+                              height: 7,
+                              background:
+                                step.design?.accent_color || "#1f5a4c",
+                            }}
+                          />
+                          <div className="p-4">
+                            <p
+                              style={{ fontFamily: FD }}
+                              className="text-[17px] font-semibold"
+                            >
+                              {step.design?.heading ||
+                                step.subject ||
+                                "Your newsletter headline"}
+                            </p>
+                            <p
+                              style={{ color: C.sub, whiteSpace: "pre-wrap" }}
+                              className="mt-2 text-[12px] leading-relaxed"
+                            >
+                              {step.body ||
+                                "Your newsletter message will appear here."}
+                            </p>
+                            {step.design?.cta_label && (
+                              <span
+                                style={{
+                                  background:
+                                    step.design?.accent_color || "#1f5a4c",
+                                  color: "#fff",
+                                }}
+                                className="inline-block mt-3 px-3 py-2 rounded-md text-[11px] font-bold"
+                              >
+                                {step.design.cta_label}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {form.steps.length > 1 && (
+                    <button
+                      onClick={() =>
+                        setForm((previous) => ({
+                          ...previous,
+                          steps: previous.steps.filter((_, i) => i !== index),
+                        }))
+                      }
+                      style={{ color: C.danger }}
+                      className="mt-1 text-[11px] font-bold"
+                    >
+                      Remove step
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() =>
+                setForm((previous) => ({
+                  ...previous,
+                  steps: [
+                    ...previous.steps,
+                    { ...emptyStep(), delay_hours: 24 },
+                  ],
+                }))
+              }
+              style={{ background: C.paper2, color: C.pine }}
+              className="px-3 py-2 rounded-lg text-[12px] font-bold flex items-center gap-1"
+            >
+              <Plus size={14} /> Add drip step
+            </button>
+            <button
+              onClick={create}
+              disabled={busy === "create"}
+              style={{ background: C.pine, color: "#fff" }}
+              className="ml-auto px-4 py-2 rounded-lg text-[12px] font-bold flex items-center gap-1"
+            >
+              {busy === "create" ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Check size={14} />
+              )}{" "}
+              Save draft
+            </button>
+          </div>
+        </section>
+        <section className="flex flex-col gap-3">
+          {campaigns.length === 0 && (
+            <p
+              style={{ color: C.faint }}
+              className="text-center py-5 text-[13px]"
+            >
+              No campaigns yet.
+            </p>
+          )}
+          {campaigns.map((campaign) => (
+            <article
+              key={campaign.id}
+              style={{ background: C.card, border: `1px solid ${C.line}` }}
+              className="rounded-2xl p-4"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <p
+                    style={{ fontFamily: FD }}
+                    className="text-[18px] font-semibold"
+                  >
+                    {campaign.name}
+                  </p>
+                  <p style={{ color: C.sub }} className="text-[12px]">
+                    {campaign.audience} · {campaign.steps.length} step
+                    {campaign.steps.length === 1 ? "" : "s"} · {campaign.status}
+                  </p>
+                  <p style={{ color: C.faint }} className="text-[11.5px] mt-1">
+                    {campaign.steps
+                      .map(
+                        (step) =>
+                          `${step.channel}${step.delay_hours ? ` +${step.delay_hours}h` : ""}`,
+                      )
+                      .join(" → ")}
+                  </p>
+                </div>
+                <button
+                  onClick={() => launch(campaign)}
+                  disabled={busy === `launch-${campaign.id}`}
+                  style={{ background: C.honey, color: C.pineDeep }}
+                  className="px-3 py-2 rounded-lg text-[11.5px] font-bold flex items-center gap-1"
+                >
+                  {busy === `launch-${campaign.id}` ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Send size={13} />
+                  )}{" "}
+                  Launch
+                </button>
+              </div>
+              {Object.keys(campaign.delivery_counts || {}).length > 0 && (
+                <div
+                  style={{ background: C.paper2, color: C.sub }}
+                  className="mt-3 px-3 py-2 rounded-lg text-[11px] font-semibold"
+                >
+                  {Object.entries(campaign.delivery_counts)
+                    .map(([status, count]) => `${count} ${status}`)
+                    .join(" · ")}
+                </div>
+              )}
+            </article>
+          ))}
+        </section>
+      </div>
+      <aside
+        style={{ background: C.card, border: `1px solid ${C.line}` }}
+        className="rounded-2xl p-4 self-start"
+      >
+        <div className="flex items-center gap-2">
+          <Users size={17} color={C.pine} />
+          <div>
+            <p style={{ fontFamily: FD }} className="text-[17px] font-semibold">
+              Newsletter list
+            </p>
+            <p style={{ color: C.sub }} className="text-[11.5px]">
+              Customers and community contacts
+            </p>
+          </div>
+        </div>
+        {publicLinks && (
+          <div
+            style={{ background: C.paper2, border: `1px solid ${C.line}` }}
+            className="mt-4 rounded-xl p-3"
+          >
+            <p className="text-[12px] font-bold">Public signup links</p>
+            <p style={{ color: C.sub }} className="mt-1 text-[10.5px]">
+              Share the vendor application or customer newsletter form.
+            </p>
+            <div className="flex flex-col gap-1.5 mt-2">
+              <button
+                onClick={() =>
+                  copyLink(
+                    "Vendor application",
+                    publicUrl("apply", publicLinks.vendor_key),
+                  )
+                }
+                style={{ color: C.pine }}
+                className="text-left text-[11px] font-bold flex gap-1 items-center"
+              >
+                <Copy size={12} /> Copy vendor application
+              </button>
+              <button
+                onClick={() =>
+                  copyLink(
+                    "Customer signup",
+                    publicUrl("subscribe", publicLinks.subscribe_key),
+                  )
+                }
+                style={{ color: C.pine }}
+                className="text-left text-[11px] font-bold flex gap-1 items-center"
+              >
+                <Copy size={12} /> Copy customer signup
+              </button>
+            </div>
+          </div>
+        )}
+        {canWrite && (
+          <div className="flex flex-col gap-2 mt-4">
+            <input
+              value={subscriber.name}
+              onChange={(event) =>
+                setSubscriber((previous) => ({
+                  ...previous,
+                  name: event.target.value,
+                }))
+              }
+              placeholder="Name"
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[12.5px] outline-none"
+            />
+            <input
+              value={subscriber.email}
+              onChange={(event) =>
+                setSubscriber((previous) => ({
+                  ...previous,
+                  email: event.target.value,
+                }))
+              }
+              placeholder="Email (optional)"
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[12.5px] outline-none"
+            />
+            <input
+              value={subscriber.phone}
+              onChange={(event) =>
+                setSubscriber((previous) => ({
+                  ...previous,
+                  phone: event.target.value,
+                }))
+              }
+              placeholder="Mobile (optional)"
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[12.5px] outline-none"
+            />
+            <button
+              onClick={addSubscriber}
+              disabled={busy === "subscriber"}
+              style={{ background: C.pine, color: "#fff" }}
+              className="px-3 py-2 rounded-lg text-[12px] font-bold"
+            >
+              Add contact
+            </button>
+          </div>
+        )}
+        <div className="flex flex-col gap-1.5 mt-4">
+          {subscribers.length === 0 && (
+            <p style={{ color: C.faint }} className="text-[12px]">
+              No newsletter contacts yet.
+            </p>
+          )}
+          {subscribers.map((item) => (
+            <div
+              key={item.id}
+              style={{ background: C.paper2 }}
+              className="rounded-lg p-2 flex gap-2 items-center"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-semibold truncate">
+                  {item.name || "Subscriber"}
+                </p>
+                <p style={{ color: C.sub }} className="text-[10.5px] truncate">
+                  {item.email || item.phone}
+                </p>
+              </div>
+              {canWrite && (
+                <button
+                  onClick={() => removeSubscriber(item.id)}
+                  style={{ color: C.danger }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </aside>
+    </div>
+  );
 }
