@@ -393,8 +393,9 @@ export default function MapEditor({
           )}
         </div>
         <p style={{ color: C.sub }} className="mt-2 text-[11.5px]">
-          Drag any canopy or truck where you want it; use the lower-right handle
-          to resize it. Update the reusable template whenever the venue changes.
+          Drag any canopy or truck where you want it. Each of the four white
+          corner handles independently changes both its width and height. Update
+          the reusable template whenever the venue changes.
         </p>
         <div className="flex flex-wrap gap-2 mt-3">
           {canWrite && (
@@ -557,10 +558,26 @@ export default function MapEditor({
                 >
                   <Trash2 size={9} />
                 </button>
-                <span onPointerDown={(event) => begin(event, index, "resize-nw")} style={{ cursor: "nwse-resize" }} className="absolute -left-1 -top-1 w-3 h-3 bg-white border border-slate-400 rounded-full" />
-                <span onPointerDown={(event) => begin(event, index, "resize-ne")} style={{ cursor: "nesw-resize" }} className="absolute -right-1 -top-1 w-3 h-3 bg-white border border-slate-400 rounded-full" />
-                <span onPointerDown={(event) => begin(event, index, "resize-sw")} style={{ cursor: "nesw-resize" }} className="absolute -left-1 -bottom-1 w-3 h-3 bg-white border border-slate-400 rounded-full" />
-                <span onPointerDown={(event) => begin(event, index, "resize-se")} style={{ cursor: "nwse-resize" }} className="absolute -right-1 -bottom-1 w-3 h-3 bg-white border border-slate-400 rounded-full" />
+                <span
+                  onPointerDown={(event) => begin(event, index, "resize-nw")}
+                  style={{ cursor: "nwse-resize" }}
+                  className="absolute -left-1 -top-1 w-3 h-3 bg-white border border-slate-400 rounded-full"
+                />
+                <span
+                  onPointerDown={(event) => begin(event, index, "resize-ne")}
+                  style={{ cursor: "nesw-resize" }}
+                  className="absolute -right-1 -top-1 w-3 h-3 bg-white border border-slate-400 rounded-full"
+                />
+                <span
+                  onPointerDown={(event) => begin(event, index, "resize-sw")}
+                  style={{ cursor: "nesw-resize" }}
+                  className="absolute -left-1 -bottom-1 w-3 h-3 bg-white border border-slate-400 rounded-full"
+                />
+                <span
+                  onPointerDown={(event) => begin(event, index, "resize-se")}
+                  style={{ cursor: "nwse-resize" }}
+                  className="absolute -right-1 -bottom-1 w-3 h-3 bg-white border border-slate-400 rounded-full"
+                />
               </>
             )}
           </div>
