@@ -20,8 +20,7 @@ const blank = {
   city: "",
   category: "",
   booth_type: "tent",
-  booth_size: "",
-  power_needed: false,
+  truck_size: "",
   instagram: "",
   tiktok: "",
   facebook: "",
@@ -363,24 +362,15 @@ export default function ApplicationPage({ applicationKey }) {
                 <option value="tent">Tent / booth</option>
                 <option value="truck">Food truck</option>
               </select>
-              <input
-                value={form.booth_size}
-                onChange={(e) => set("booth_size", e.target.value)}
-                placeholder="Booth or truck size (e.g. 10×10)"
-                style={inp}
-                className="px-3 py-2.5 rounded-lg text-[14px] outline-none"
-              />
-              <label
-                style={inp}
-                className="px-3 py-2.5 rounded-lg text-[14px] flex items-center gap-2"
-              >
+              {form.booth_type === "truck" && (
                 <input
-                  checked={form.power_needed}
-                  onChange={(e) => set("power_needed", e.target.checked)}
-                  type="checkbox"
-                />{" "}
-                I need electrical power
-              </label>
+                  value={form.truck_size}
+                  onChange={(e) => set("truck_size", e.target.value)}
+                  placeholder="Truck length (e.g. 15, 18, or 24 ft)"
+                  style={inp}
+                  className="px-3 py-2.5 rounded-lg text-[14px] outline-none"
+                />
+              )}
             </div>
             {selectedMarket && (
               <div

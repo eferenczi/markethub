@@ -281,8 +281,9 @@ export default function ApplicationsTab({ user, canWrite, notify }) {
                 className="rounded-lg p-2.5"
               >
                 <b>Setup:</b> {application.booth_type}
-                {application.booth_size ? ` · ${application.booth_size}` : ""}
-                {application.power_needed ? " · power needed" : ""}
+                {application.booth_type === "truck" && application.booth_size
+                  ? ` · ${application.booth_size}`
+                  : ""}
                 <br />
                 <b>Category:</b> {application.category || "Not provided"}
               </div>
