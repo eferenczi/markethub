@@ -297,10 +297,17 @@ test("operations: market date, CRM link, approval, payment, and booth map persis
   const paid = await api(`/operations/approvals/${approval.body.approval.id}/record-payment`, {
     method: "POST",
     token,
-    body: { payment_method: "cash" },
+    body: { payment_method: "stripe" },
   });
   assert.equal(paid.status, 200);
   assert.equal(paid.body.approval.status, "paid");
+  assert.ok(paid.body.approval.processing_fee_cents > 0);
+
+  const financials = await api(`/operations/financial-report?market_id=${market.id}`, { token });
+  assert.equal(financials.status, 200);
+  assert.equal(financials.body.totals.collected_cents, paid.body.approval.amount_due_cents);
+  assert.ok(financials.body.totals.processing_fees_cents > 0);
+  assert.equal(financials.body.by_payment_method[0].label, "stripe");
 
   const layout = await api("/operations/layouts", {
     method: "POST",
@@ -313,6 +320,16 @@ test("operations: market date, CRM link, approval, payment, and booth map persis
   });
   assert.equal(layout.status, 201);
   assert.equal(layout.body.layout.spots[0].vendor_id, vendor.id);
+
+  const template = await api("/operations/layout-templates", {
+    method: "POST",
+    token,
+    body: { market_id: market.id, name: "Main venue", venue_image: "data:image/png;base64,SGVsbG8=", spots: [{ code: "B1", kind: "tent", x: 10, y: 10, width: 10, height: 8, rotation: 10, sort_order: 0 }] },
+  });
+  assert.equal(template.status, 201);
+  const appliedTemplate = await api(`/operations/layout-templates/${template.body.template.id}/apply`, { method: "POST", token, body: { market_date_id: date.body.market_date.id } });
+  assert.equal(appliedTemplate.status, 200);
+  assert.equal(appliedTemplate.body.layout.spots[0].vendor_id, null, "templates do not carry a vendor into future events");
 
   const list = await api(`/operations/approvals?market_date_id=${date.body.market_date.id}`, { token });
   assert.equal(list.status, 200);

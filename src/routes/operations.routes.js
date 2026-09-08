@@ -13,6 +13,10 @@ router.use(requireAuth, requireActiveSubscription);
 const canWrite = requireRole("owner", "manager", "staff");
 const DATE_STATUS = ["published", "tentative", "skipped"];
 const APPROVAL_STATUS = ["pending", "awaiting_payment", "held", "paid", "released"];
+const PROCESSING_RATES = {
+  stripe: { percent: 2.9, fixed: 30 }, applepay: { percent: 2.9, fixed: 30 }, googlepay: { percent: 2.9, fixed: 30 },
+  paypal: { percent: 2.99, fixed: 49 }, venmo: { percent: 1.9, fixed: 10 }, zelle: { percent: 0, fixed: 0 }, cash: { percent: 0, fixed: 0 }, other: { percent: 0, fixed: 0 },
+};
 
 const optionalId = (value) => (value === undefined ? undefined : Number(value));
 
@@ -52,6 +56,15 @@ function approvalSummary(row) {
 
 function layoutWithSpots(layout) {
   return db("booth_spots").where({ layout_id: layout.id }).orderBy("sort_order").then((spots) => ({ ...layout, spots }));
+}
+
+function templateWithSpots(template) {
+  return db("booth_template_spots").where({ template_id: template.id }).orderBy("sort_order").then((spots) => ({ ...template, spots }));
+}
+
+function processingFee(method, amountCents) {
+  const rate = PROCESSING_RATES[method] || PROCESSING_RATES.other;
+  return Math.round(Number(amountCents || 0) * rate.percent / 100) + rate.fixed;
 }
 
 // ---- market dates -------------------------------------------------------
@@ -223,11 +236,51 @@ router.post(
 router.post(
   "/approvals/:id/record-payment",
   canWrite,
-  validate(z.object({ payment_method: z.enum(["stripe", "applepay", "googlepay", "paypal", "venmo", "zelle", "cash", "other"]) })),
+  validate(z.object({ payment_method: z.enum(["stripe", "applepay", "googlepay", "paypal", "venmo", "zelle", "cash", "other"]), processing_fee_cents: z.number().int().nonnegative().optional() })),
   asyncHandler(async (req, res) => {
     const approval = await approvalForOrg(req.user.org_id, req.params.id);
-    await db("approvals").where({ id: approval.id }).update({ status: "paid", payment_method: req.body.payment_method, paid_at: new Date().toISOString(), payment_deadline_at: null, updated_at: new Date().toISOString() });
+    const amount_due_cents = approvalSummary(approval).amount_due_cents;
+    const processing_fee_cents = req.body.processing_fee_cents === undefined ? processingFee(req.body.payment_method, amount_due_cents) : req.body.processing_fee_cents;
+    await db("approvals").where({ id: approval.id }).update({ status: "paid", payment_method: req.body.payment_method, processing_fee_cents, paid_at: new Date().toISOString(), payment_deadline_at: null, updated_at: new Date().toISOString() });
     res.json({ approval: approvalSummary(await db("approvals").where({ id: approval.id }).first()) });
+  })
+);
+
+router.get(
+  "/financial-report",
+  asyncHandler(async (req, res) => {
+    const marketId = optionalId(req.query.market_id);
+    if (marketId !== undefined) await marketForOrg(req.user.org_id, marketId);
+    const query = db("approvals as a")
+      .join("vendors as v", "v.id", "a.vendor_id")
+      .join("markets as m", "m.id", "a.market_id")
+      .join("market_dates as d", "d.id", "a.market_date_id")
+      .where("a.org_id", req.user.org_id)
+      .select("a.*", "v.business_name", "m.name as market_name", "d.event_date");
+    if (marketId !== undefined) query.andWhere("a.market_id", marketId);
+    const transactions = (await query.orderBy("d.event_date", "desc").orderBy("a.id", "desc")).map((row) => {
+      const summary = approvalSummary(row);
+      const discount_cents = Number(row.fee_cents || 0) - summary.amount_due_cents;
+      return { ...summary, base_cents: Number(row.fee_cents || 0), discount_cents, processing_fee_cents: Number(row.processing_fee_cents || 0), net_payout_cents: row.status === "paid" ? summary.amount_due_cents - Number(row.processing_fee_cents || 0) : 0 };
+    });
+    const paid = transactions.filter((transaction) => transaction.status === "paid");
+    const totals = {
+      collected_cents: paid.reduce((sum, transaction) => sum + transaction.amount_due_cents, 0),
+      outstanding_cents: transactions.filter((transaction) => ["pending", "awaiting_payment", "held"].includes(transaction.status)).reduce((sum, transaction) => sum + transaction.amount_due_cents, 0),
+      discounts_cents: transactions.reduce((sum, transaction) => sum + transaction.discount_cents, 0),
+      processing_fees_cents: paid.reduce((sum, transaction) => sum + transaction.processing_fee_cents, 0),
+    };
+    totals.net_payout_cents = totals.collected_cents - totals.processing_fees_cents;
+    const group = (key) => Object.values(paid.reduce((groups, transaction) => {
+      const name = transaction[key] || "Unspecified";
+      if (!groups[name]) groups[name] = { label: name, collected_cents: 0, processing_fees_cents: 0, net_payout_cents: 0, transactions: 0 };
+      groups[name].collected_cents += transaction.amount_due_cents;
+      groups[name].processing_fees_cents += transaction.processing_fee_cents;
+      groups[name].net_payout_cents += transaction.net_payout_cents;
+      groups[name].transactions += 1;
+      return groups;
+    }, {})).sort((a, b) => b.collected_cents - a.collected_cents);
+    res.json({ totals, by_market: group("market_name"), by_payment_method: group("payment_method"), transactions });
   })
 );
 
@@ -324,6 +377,80 @@ router.put(
       }
     });
     res.json({ layout: await layoutWithSpots(await db("booth_layouts").where({ id: layout.id }).first()) });
+  })
+);
+
+// ---- reusable market map templates -------------------------------------
+const templateSpotSchema = spotSchema.omit({ vendor_id: true });
+const templateSchema = z.object({ market_id: z.number().int().positive(), name: z.string().min(1).max(120), venue_image: z.string().max(5_000_000).nullable().optional(), spots: z.array(templateSpotSchema).max(500).default([]) });
+
+router.get(
+  "/layout-templates",
+  asyncHandler(async (req, res) => {
+    const marketId = optionalId(req.query.market_id);
+    if (marketId === undefined) throw new ApiError(400, "market_id is required");
+    await marketForOrg(req.user.org_id, marketId);
+    const templates = await db("booth_templates").where({ org_id: req.user.org_id, market_id: marketId }).orderBy("updated_at", "desc");
+    res.json({ templates: await Promise.all(templates.map(templateWithSpots)) });
+  })
+);
+
+router.post(
+  "/layout-templates",
+  canWrite,
+  validate(templateSchema),
+  asyncHandler(async (req, res) => {
+    await marketForOrg(req.user.org_id, req.body.market_id);
+    const duplicate = await db("booth_templates").where({ market_id: req.body.market_id, name: req.body.name }).first();
+    if (duplicate) throw new ApiError(409, "A template with that name already exists for this market");
+    const template = await db.transaction(async (trx) => {
+      const id = await insertId(trx, "booth_templates", { org_id: req.user.org_id, market_id: req.body.market_id, name: req.body.name, venue_image: req.body.venue_image || null });
+      if (req.body.spots.length) await trx("booth_template_spots").insert(req.body.spots.map((spot) => ({ ...spot, template_id: id })));
+      return trx("booth_templates").where({ id }).first();
+    });
+    res.status(201).json({ template: await templateWithSpots(template) });
+  })
+);
+
+router.put(
+  "/layout-templates/:id",
+  canWrite,
+  validate(templateSchema.omit({ market_id: true }).partial().refine((value) => Object.keys(value).length > 0)),
+  asyncHandler(async (req, res) => {
+    const template = await db("booth_templates").where({ id: req.params.id, org_id: req.user.org_id }).first();
+    if (!template) throw new ApiError(404, "Map template not found");
+    await db.transaction(async (trx) => {
+      const { spots, ...patch } = req.body;
+      if (Object.keys(patch).length) await trx("booth_templates").where({ id: template.id }).update({ ...patch, updated_at: new Date().toISOString() });
+      if (spots) {
+        await trx("booth_template_spots").where({ template_id: template.id }).del();
+        if (spots.length) await trx("booth_template_spots").insert(spots.map((spot) => ({ ...spot, template_id: template.id })));
+      }
+    });
+    res.json({ template: await templateWithSpots(await db("booth_templates").where({ id: template.id }).first()) });
+  })
+);
+
+router.post(
+  "/layout-templates/:id/apply",
+  canWrite,
+  validate(z.object({ market_date_id: z.number().int().positive() })),
+  asyncHandler(async (req, res) => {
+    const template = await db("booth_templates").where({ id: req.params.id, org_id: req.user.org_id }).first();
+    if (!template) throw new ApiError(404, "Map template not found");
+    const marketDate = await dateForOrg(req.user.org_id, req.body.market_date_id);
+    if (marketDate.market_id !== template.market_id) throw new ApiError(400, "This template belongs to a different market");
+    const templateSpots = await db("booth_template_spots").where({ template_id: template.id }).orderBy("sort_order");
+    const layout = await db.transaction(async (trx) => {
+      const existing = await trx("booth_layouts").where({ market_date_id: marketDate.id, name: "Floor plan" }).first();
+      const values = { venue_image: template.venue_image, updated_at: new Date().toISOString() };
+      const id = existing ? existing.id : await insertId(trx, "booth_layouts", { org_id: req.user.org_id, market_id: marketDate.market_id, market_date_id: marketDate.id, name: "Floor plan", venue_image: template.venue_image });
+      if (existing) await trx("booth_layouts").where({ id }).update(values);
+      await trx("booth_spots").where({ layout_id: id }).del();
+      if (templateSpots.length) await trx("booth_spots").insert(templateSpots.map(({ id: _id, template_id: _templateId, ...spot }) => ({ ...spot, layout_id: id, vendor_id: null })));
+      return trx("booth_layouts").where({ id }).first();
+    });
+    res.json({ layout: await layoutWithSpots(layout) });
   })
 );
 
