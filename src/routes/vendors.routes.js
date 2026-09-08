@@ -11,6 +11,7 @@ const router = express.Router();
 router.use(requireAuth, requireActiveSubscription);
 
 const canWrite = requireRole("owner", "manager", "staff");
+const tagSchema = z.array(z.string().trim().min(1).max(48)).max(30);
 
 const vendorSchema = z.object({
   business_name: z.string().min(1),
@@ -28,7 +29,28 @@ const vendorSchema = z.object({
     .optional()
     .default("Lead"),
   notes: z.string().optional().default(""),
+  tags: tagSchema.optional().default([]),
 });
+
+function vendorForClient(vendor) {
+  let tags = [];
+  try {
+    tags = Array.isArray(vendor.tags)
+      ? vendor.tags
+      : JSON.parse(vendor.tags || "[]");
+  } catch {
+    tags = [];
+  }
+  return { ...vendor, tags };
+}
+function vendorValues(values) {
+  const next = { ...values };
+  if (Array.isArray(next.tags))
+    next.tags = JSON.stringify([
+      ...new Set(next.tags.map((tag) => tag.trim()).filter(Boolean)),
+    ]);
+  return next;
+}
 
 router.get(
   "/",
@@ -36,7 +58,7 @@ router.get(
     const vendors = await db("vendors")
       .where({ org_id: req.user.org_id })
       .orderBy("business_name");
-    res.json({ vendors });
+    res.json({ vendors: vendors.map(vendorForClient) });
   }),
 );
 
@@ -105,7 +127,7 @@ router.get(
       };
     });
     res.json({
-      vendor,
+      vendor: vendorForClient(vendor),
       markets,
       applications: applications.map((application) => ({
         ...application,
@@ -122,10 +144,14 @@ router.post(
   validate(vendorSchema),
   asyncHandler(async (req, res) => {
     const id = await insertId(db, "vendors", {
-      ...req.body,
+      ...vendorValues(req.body),
       org_id: req.user.org_id,
     });
-    res.status(201).json({ vendor: await db("vendors").where({ id }).first() });
+    res
+      .status(201)
+      .json({
+        vendor: vendorForClient(await db("vendors").where({ id }).first()),
+      });
   }),
 );
 
@@ -138,8 +164,12 @@ router.patch(
       .where({ id: req.params.id, org_id: req.user.org_id })
       .first();
     if (!vendor) throw new ApiError(404, "Vendor not found");
-    await db("vendors").where({ id: vendor.id }).update(req.body);
-    res.json({ vendor: await db("vendors").where({ id: vendor.id }).first() });
+    await db("vendors").where({ id: vendor.id }).update(vendorValues(req.body));
+    res.json({
+      vendor: vendorForClient(
+        await db("vendors").where({ id: vendor.id }).first(),
+      ),
+    });
   }),
 );
 

@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { ExternalLink, FileText, ImageIcon, Loader2, X } from "lucide-react";
+import {
+  ExternalLink,
+  FileText,
+  ImageIcon,
+  Loader2,
+  Mail,
+  MessageCircle,
+  MessageSquare,
+  Phone,
+  Save,
+  X,
+} from "lucide-react";
 import { api } from "./api";
 import { C, FD } from "./theme";
 
@@ -10,15 +21,99 @@ const assetLabel = (asset) =>
     booth_photo: "Booth photo",
     product_photo: "Product photo",
   })[asset.kind] || "Uploaded file";
+const phoneDigits = (phone) => String(phone || "").replace(/\D/g, "");
+const socialUrl = (type, handle) => {
+  if (!handle) return "";
+  if (/^https?:\/\//i.test(handle)) return handle;
+  const clean = handle.replace(/^@/, "");
+  return type === "instagram"
+    ? `https://instagram.com/${clean}`
+    : type === "tiktok"
+      ? `https://www.tiktok.com/@${clean}`
+      : `https://www.facebook.com/${clean}`;
+};
 
-export default function VendorProfileCard({ vendorId, onClose, notify }) {
+function ContactActions({ vendor }) {
+  const phone = phoneDigits(vendor.phone);
+  const links = [
+    vendor.email && {
+      href: `mailto:${vendor.email}`,
+      label: "Email",
+      Icon: Mail,
+    },
+    phone && { href: `tel:${phone}`, label: "Call", Icon: Phone },
+    phone && { href: `sms:${phone}`, label: "Text", Icon: MessageSquare },
+    phone && {
+      href: `https://wa.me/${phone}`,
+      label: "WhatsApp",
+      Icon: MessageCircle,
+      external: true,
+    },
+    vendor.instagram && {
+      href: socialUrl("instagram", vendor.instagram),
+      label: "Instagram",
+      Icon: ExternalLink,
+      external: true,
+    },
+    vendor.tiktok && {
+      href: socialUrl("tiktok", vendor.tiktok),
+      label: "TikTok",
+      Icon: ExternalLink,
+      external: true,
+    },
+    vendor.facebook && {
+      href: socialUrl("facebook", vendor.facebook),
+      label: "Facebook",
+      Icon: ExternalLink,
+      external: true,
+    },
+  ].filter(Boolean);
+  if (!links.length) return null;
+  return (
+    <section style={{ background: C.paper2 }} className="rounded-xl p-3 mt-4">
+      <p style={{ color: C.faint }} className="text-[10px] font-bold uppercase">
+        Contact this vendor
+      </p>
+      <div className="flex flex-wrap gap-2 mt-2">
+        {links.map(({ href, label, Icon, external }) => (
+          <a
+            key={label}
+            href={href}
+            target={external ? "_blank" : undefined}
+            rel={external ? "noreferrer" : undefined}
+            style={{
+              background: C.card,
+              color: C.pine,
+              border: `1px solid ${C.line}`,
+            }}
+            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1"
+          >
+            <Icon size={13} /> {label}
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export default function VendorProfileCard({
+  vendorId,
+  canWrite,
+  onClose,
+  notify,
+}) {
   const [data, setData] = useState(null);
+  const [tagText, setTagText] = useState("");
+  const [savingTags, setSavingTags] = useState(false);
   useEffect(() => {
     api
       .getVendorProfile(vendorId)
       .then(setData)
       .catch((error) => notify(error.message, "err"));
   }, [vendorId]);
+  useEffect(() => {
+    if (data) setTagText((data.vendor.tags || []).join(", "));
+  }, [data]);
   const openAsset = async (applicationId, asset) => {
     try {
       const blob = await api.getApplicationAsset(applicationId, asset.id);
@@ -46,6 +141,27 @@ export default function VendorProfileCard({ vendorId, onClose, notify }) {
       </div>
     );
   const { vendor, approvals, applications, markets } = data;
+  const saveTags = async () => {
+    setSavingTags(true);
+    try {
+      const result = await api.updateVendor(vendor.id, {
+        tags: [
+          ...new Set(
+            tagText
+              .split(",")
+              .map((tag) => tag.trim())
+              .filter(Boolean),
+          ),
+        ],
+      });
+      setData((current) => ({ ...current, vendor: result.vendor }));
+      notify("Vendor tags saved");
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      setSavingTags(false);
+    }
+  };
   return (
     <div className="fixed inset-0 z-50 bg-black/35 p-3 sm:p-7 overflow-y-auto">
       <section
@@ -101,8 +217,28 @@ export default function VendorProfileCard({ vendorId, onClose, notify }) {
               Contact
             </p>
             <p className="font-semibold mt-1">{vendor.contact_name || "—"}</p>
-            <p style={{ color: C.sub }}>{vendor.email || "No email"}</p>
-            <p style={{ color: C.sub }}>{vendor.phone || "No phone"}</p>
+            {vendor.email ? (
+              <a
+                href={`mailto:${vendor.email}`}
+                style={{ color: C.pine }}
+                className="block hover:underline"
+              >
+                {vendor.email}
+              </a>
+            ) : (
+              <p style={{ color: C.sub }}>No email</p>
+            )}
+            {vendor.phone ? (
+              <a
+                href={`tel:${phoneDigits(vendor.phone)}`}
+                style={{ color: C.pine }}
+                className="block hover:underline"
+              >
+                {vendor.phone}
+              </a>
+            ) : (
+              <p style={{ color: C.sub }}>No phone</p>
+            )}
           </div>
           <div>
             <p
@@ -124,11 +260,98 @@ export default function VendorProfileCard({ vendorId, onClose, notify }) {
             >
               Social
             </p>
-            <p className="mt-1">{vendor.instagram || "—"}</p>
-            <p style={{ color: C.sub }}>{vendor.tiktok || ""}</p>
-            <p style={{ color: C.sub }}>{vendor.facebook || ""}</p>
+            {vendor.instagram ? (
+              <a
+                href={socialUrl("instagram", vendor.instagram)}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: C.pine }}
+                className="block mt-1 hover:underline"
+              >
+                {vendor.instagram}
+              </a>
+            ) : (
+              <p className="mt-1">—</p>
+            )}
+            {vendor.tiktok && (
+              <a
+                href={socialUrl("tiktok", vendor.tiktok)}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: C.pine }}
+                className="block hover:underline"
+              >
+                {vendor.tiktok}
+              </a>
+            )}
+            {vendor.facebook && (
+              <a
+                href={socialUrl("facebook", vendor.facebook)}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: C.pine }}
+                className="block hover:underline"
+              >
+                {vendor.facebook}
+              </a>
+            )}
           </div>
         </div>
+        <section
+          style={{ border: `1px solid ${C.line}` }}
+          className="rounded-xl p-3 mt-4"
+        >
+          <p
+            style={{ color: C.faint }}
+            className="text-[10px] font-bold uppercase"
+          >
+            Vendor tags
+          </p>
+          {canWrite ? (
+            <div className="flex gap-2 mt-2">
+              <input
+                value={tagText}
+                onChange={(event) => setTagText(event.target.value)}
+                placeholder="e.g. food truck, vegan, priority"
+                style={{
+                  background: C.paper2,
+                  border: `1px solid ${C.line}`,
+                  color: C.ink,
+                }}
+                className="flex-1 px-2.5 py-1.5 rounded-lg text-[12px] outline-none"
+              />
+              <button
+                onClick={saveTags}
+                disabled={savingTags}
+                style={{
+                  background: C.pine,
+                  color: "#fff",
+                  opacity: savingTags ? 0.6 : 1,
+                }}
+                className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1"
+              >
+                <Save size={12} /> Save
+              </button>
+            </div>
+          ) : null}
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {(vendor.tags || []).map((tag) => (
+              <span
+                key={tag}
+                style={{ background: C.sageSoft, color: C.pine }}
+                className="px-2 py-1 rounded-full text-[10.5px] font-bold"
+              >
+                {tag}
+              </span>
+            ))}
+            {(vendor.tags || []).length === 0 && !canWrite && (
+              <span style={{ color: C.faint }} className="text-[11px]">
+                No tags yet.
+              </span>
+            )}
+          </div>
+        </section>
+        <ContactActions vendor={vendor} />
         <div className="grid lg:grid-cols-2 gap-4 mt-5">
           <section
             style={{ border: `1px solid ${C.line}` }}

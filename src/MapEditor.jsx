@@ -170,6 +170,24 @@ export default function MapEditor({
       window.removeEventListener("pointerup", up);
     };
   }, []);
+  useEffect(() => {
+    const removeSelected = (event) => {
+      if (event.key !== "Delete" || selectedIndex == null) return;
+      const tag = event.target?.tagName;
+      if (
+        ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag) ||
+        event.target?.isContentEditable
+      )
+        return;
+      event.preventDefault();
+      setSpots((current) =>
+        current.filter((_, index) => index !== selectedIndex),
+      );
+      setSelectedIndex(null);
+    };
+    window.addEventListener("keydown", removeSelected);
+    return () => window.removeEventListener("keydown", removeSelected);
+  }, [selectedIndex]);
   const begin = (event, index, mode) => {
     if (!canWrite || (event.pointerType === "mouse" && event.button !== 0))
       return;

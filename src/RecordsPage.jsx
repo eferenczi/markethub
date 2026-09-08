@@ -37,6 +37,14 @@ const emptyVendorDetails = {
   rules: "",
   contact: "",
 };
+const splitTags = (value) => [
+  ...new Set(
+    value
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+  ),
+];
 
 function MarketDetailsCard({ market, canWrite, onClose, onSave, notify }) {
   const [description, setDescription] = useState(market.description || "");
@@ -576,6 +584,7 @@ function MarketsTab({ canWrite, notify }) {
 function VendorsTab({ canWrite, notify }) {
   const [rows, setRows] = useState(null);
   const [profileId, setProfileId] = useState(null);
+  const [search, setSearch] = useState("");
   const [form, setForm] = useState({
     business_name: "",
     contact_name: "",
@@ -583,6 +592,7 @@ function VendorsTab({ canWrite, notify }) {
     email: "",
     category: "",
     booth_type: "tent",
+    tags: "",
   });
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
@@ -604,6 +614,7 @@ function VendorsTab({ canWrite, notify }) {
       await api.createVendor({
         ...form,
         business_name: form.business_name.trim(),
+        tags: splitTags(form.tags),
       });
       setForm({
         business_name: "",
@@ -612,6 +623,7 @@ function VendorsTab({ canWrite, notify }) {
         email: "",
         category: "",
         booth_type: "tent",
+        tags: "",
       });
       notify("Vendor saved");
       load();
@@ -641,6 +653,21 @@ function VendorsTab({ canWrite, notify }) {
 
   if (!rows) return <Loading />;
   const STAGES = ["Lead", "Applied", "Approved", "Active", "Lapsed"];
+  const query = search.trim().toLowerCase();
+  const filteredRows = rows.filter((vendor) =>
+    [
+      vendor.business_name,
+      vendor.contact_name,
+      vendor.category,
+      vendor.phone,
+      vendor.email,
+      ...(vendor.tags || []),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(query),
+  );
   return (
     <div>
       {canWrite && (
@@ -699,6 +726,13 @@ function VendorsTab({ canWrite, notify }) {
               <option value="tent">Tent</option>
               <option value="truck">Truck</option>
             </select>
+            <input
+              value={form.tags}
+              onChange={(e) => set("tags", e.target.value)}
+              placeholder="Tags (comma separated)"
+              style={inp}
+              className="col-span-2 px-3 py-2 rounded-lg text-[13px] outline-none"
+            />
           </div>
           <button
             onClick={add}
@@ -719,9 +753,30 @@ function VendorsTab({ canWrite, notify }) {
           </button>
         </div>
       )}
+      <div
+        style={{ background: C.card, border: `1px solid ${C.line}` }}
+        className="rounded-xl p-3 mb-3 flex gap-2 items-center"
+      >
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search name, business, category, tags, phone, or email…"
+          style={inp}
+          className="flex-1 px-3 py-2 rounded-lg text-[13px] outline-none"
+        />
+        <span
+          style={{ color: C.sub }}
+          className="text-[11.5px] font-semibold whitespace-nowrap"
+        >
+          {filteredRows.length} of {rows.length}
+        </span>
+      </div>
       <div className="flex flex-col gap-2">
         {rows.length === 0 && <Empty label="No vendors yet." />}
-        {rows.map((v) => (
+        {rows.length > 0 && filteredRows.length === 0 && (
+          <Empty label="No vendors match that search." />
+        )}
+        {filteredRows.map((v) => (
           <div
             key={v.id}
             onClick={() => setProfileId(v.id)}
@@ -747,6 +802,19 @@ function VendorsTab({ canWrite, notify }) {
                   .filter(Boolean)
                   .join(" · ") || "—"}
               </p>
+              {(v.tags || []).length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {v.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      style={{ background: C.sageSoft, color: C.pine }}
+                      className="px-1.5 py-0.5 rounded text-[9.5px] font-bold"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             {canWrite ? (
               <select
@@ -788,6 +856,7 @@ function VendorsTab({ canWrite, notify }) {
       {profileId && (
         <VendorProfileCard
           vendorId={profileId}
+          canWrite={canWrite}
           onClose={() => setProfileId(null)}
           notify={notify}
         />
