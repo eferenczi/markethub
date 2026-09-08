@@ -330,6 +330,10 @@ test("operations: market date, CRM link, approval, payment, and booth map persis
   const appliedTemplate = await api(`/operations/layout-templates/${template.body.template.id}/apply`, { method: "POST", token, body: { market_date_id: date.body.market_date.id } });
   assert.equal(appliedTemplate.status, 200);
   assert.equal(appliedTemplate.body.layout.spots[0].vendor_id, null, "templates do not carry a vendor into future events");
+  const futureDate = await api("/operations/market-dates", { method: "POST", token, body: { market_id: market.id, event_date: "2026-10-10" } });
+  assert.equal(futureDate.status, 201);
+  const copiedLayout = await api(`/operations/layouts?market_date_id=${futureDate.body.market_date.id}`, { token });
+  assert.equal(copiedLayout.body.layouts[0].spots[0].code, "B1", "new market dates start with the current market template");
 
   const list = await api(`/operations/approvals?market_date_id=${date.body.market_date.id}`, { token });
   assert.equal(list.status, 200);

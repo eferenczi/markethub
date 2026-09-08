@@ -84,10 +84,20 @@ router.post(
   canWrite,
   validate(z.object({ market_id: z.number().int().positive(), event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), status: z.enum(DATE_STATUS).optional().default("published") })),
   asyncHandler(async (req, res) => {
-    await marketForOrg(req.user.org_id, req.body.market_id);
+    const market = await marketForOrg(req.user.org_id, req.body.market_id);
     const existing = await db("market_dates").where({ market_id: req.body.market_id, event_date: req.body.event_date }).first();
     if (existing) throw new ApiError(409, "That market date already exists");
     const id = await insertId(db, "market_dates", { ...req.body, org_id: req.user.org_id });
+    // The most recently updated template is the market's default floor plan.
+    // Copy it into the new event so later edits do not alter past maps.
+    const template = await db("booth_templates").where({ org_id: req.user.org_id, market_id: market.id }).orderBy("updated_at", "desc").first();
+    if (template) {
+      const spots = await db("booth_template_spots").where({ template_id: template.id }).orderBy("sort_order");
+      await db.transaction(async (trx) => {
+        const layoutId = await insertId(trx, "booth_layouts", { org_id: req.user.org_id, market_id: market.id, market_date_id: id, name: "Floor plan", venue_image: template.venue_image });
+        if (spots.length) await trx("booth_spots").insert(spots.map(({ id: _id, template_id: _templateId, ...spot }) => ({ ...spot, layout_id: layoutId, vendor_id: null })));
+      });
+    }
     const market_date = await db("market_dates").where({ id }).first();
     res.status(201).json({ market_date });
   })
