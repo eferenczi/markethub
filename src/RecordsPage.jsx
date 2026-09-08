@@ -9,6 +9,7 @@ import EventHub from "./EventHub.jsx";
 import CampaignsTab from "./CampaignsTab.jsx";
 import FinancialReports from "./FinancialReports.jsx";
 import TemplatesPage from "./TemplatesPage.jsx";
+import VendorProfileCard from "./VendorProfileCard.jsx";
 
 const inp = { background: C.card, border: `1px solid ${C.line}`, color: C.ink };
 
@@ -111,6 +112,7 @@ function MarketsTab({ canWrite, notify }) {
 /* ---------------- Vendors ---------------- */
 function VendorsTab({ canWrite, notify }) {
   const [rows, setRows] = useState(null);
+  const [profileId, setProfileId] = useState(null);
   const [form, setForm] = useState({ business_name: "", contact_name: "", phone: "", email: "", category: "", booth_type: "tent" });
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
@@ -157,23 +159,23 @@ function VendorsTab({ canWrite, notify }) {
       <div className="flex flex-col gap-2">
         {rows.length === 0 && <Empty label="No vendors yet." />}
         {rows.map((v) => (
-          <div key={v.id} style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-xl p-3 flex items-center gap-3">
+          <div key={v.id} onClick={() => setProfileId(v.id)} style={{ background: C.card, border: `1px solid ${C.line}`, cursor: "pointer" }} className="rounded-xl p-3 flex items-center gap-3 hover:brightness-[.98]">
             <div style={{ background: C.berry }} className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"><Store size={16} color="#fff" /></div>
             <div className="flex-1 min-w-0">
               <p className="text-[13.5px] font-semibold truncate">{v.business_name}</p>
               <p style={{ color: C.sub }} className="text-[11.5px] truncate">{[v.contact_name, v.category, v.booth_type].filter(Boolean).join(" · ") || "—"}</p>
             </div>
             {canWrite ? (
-              <select value={v.stage} onChange={(e) => setStage(v, e.target.value)} style={inp} className="px-2 py-1.5 rounded-lg text-[12px] font-semibold outline-none">
+              <select value={v.stage} onClick={(e) => e.stopPropagation()} onChange={(e) => setStage(v, e.target.value)} style={inp} className="px-2 py-1.5 rounded-lg text-[12px] font-semibold outline-none">
                 {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             ) : (
               <span style={{ background: C.paper2, color: C.sub }} className="text-[11px] font-bold px-2 py-1 rounded-full">{v.stage}</span>
             )}
-            {canWrite && <button onClick={() => del(v)} style={{ color: C.danger }} className="p-1.5"><Trash2 size={14} /></button>}
+            {canWrite && <button onClick={(e) => { e.stopPropagation(); del(v); }} style={{ color: C.danger }} className="p-1.5"><Trash2 size={14} /></button>}
           </div>
         ))}
-      </div>
+      </div>{profileId && <VendorProfileCard vendorId={profileId} onClose={() => setProfileId(null)} notify={notify} />}
     </div>
   );
 }

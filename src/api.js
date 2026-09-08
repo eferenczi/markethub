@@ -72,6 +72,7 @@ export const api = {
   deleteMarket: (id) => request(`/markets/${id}`, { method: "DELETE" }),
   // vendors (persisted)
   getVendors: () => request("/vendors"),
+  getVendorProfile: (id) => request(`/vendors/${id}/profile`),
   createVendor: (body) => request("/vendors", { method: "POST", body }),
   updateVendor: (id, body) => request(`/vendors/${id}`, { method: "PATCH", body }),
   deleteVendor: (id) => request(`/vendors/${id}`, { method: "DELETE" }),

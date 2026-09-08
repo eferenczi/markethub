@@ -35,6 +35,19 @@ router.get(
   })
 );
 
+router.get(
+  "/:id/profile",
+  asyncHandler(async (req, res) => {
+    const vendor = await db("vendors").where({ id: req.params.id, org_id: req.user.org_id }).first();
+    if (!vendor) throw new ApiError(404, "Vendor not found");
+    const approvals = await db("approvals as a").join("markets as m", "m.id", "a.market_id").join("market_dates as d", "d.id", "a.market_date_id").where({ "a.vendor_id": vendor.id, "a.org_id": req.user.org_id }).select("a.*", "m.name as market_name", "d.event_date").orderBy("d.event_date", "desc");
+    const applications = await db("vendor_applications as a").join("markets as m", "m.id", "a.market_id").where({ "a.vendor_id": vendor.id, "a.org_id": req.user.org_id }).select("a.*", "m.name as market_name").orderBy("a.submitted_at", "desc");
+    const markets = await db("vendor_markets as vm").join("markets as m", "m.id", "vm.market_id").where({ "vm.vendor_id": vendor.id, "vm.org_id": req.user.org_id }).select("vm.*", "m.name as market_name").orderBy("m.name");
+    const payment_history = approvals.map((approval) => { const base = Number(approval.fee_cents || 0); const discount = approval.discount_type === "amount" ? Math.min(base, Number(approval.discount_value || 0)) : approval.discount_type === "percent" ? Math.round(base * Math.min(100, Number(approval.discount_value || 0)) / 100) : 0; return { ...approval, base_cents: base, discount_cents: discount, amount_due_cents: base - discount }; });
+    res.json({ vendor, markets, applications, approvals: payment_history });
+  })
+);
+
 router.post(
   "/",
   canWrite,
