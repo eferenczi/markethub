@@ -34,6 +34,11 @@ const METHODS = [
   "other",
 ];
 const money = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
+const shortDate = (value) => {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return String(value || "");
+  return `${match[2]}/${match[3]}/${match[1].slice(-2)}`;
+};
 const title = (value) =>
   ({
     pending: "Pending",
@@ -1217,7 +1222,7 @@ export default function EventHub({ canWrite, notify }) {
               }}
               className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
             >
-              {date.event_date}
+              {shortDate(date.event_date)}
             </button>
           ))}
           {dates.length === 0 && (
