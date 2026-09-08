@@ -5,6 +5,9 @@ const db = require("../db");
 const { asyncHandler, ApiError } = require("../middleware/error");
 const { validate } = require("../middleware/validate");
 const { insertId } = require("../utils/insert-id");
+const config = require("../config");
+const stripe = require("../services/integrations/stripe");
+const { due } = require("../services/vendor-notifications");
 
 const router = express.Router();
 const key = () => crypto.randomBytes(18).toString("base64url");
@@ -17,16 +20,30 @@ const subscribeSchema = z
   .refine((value) => value.email || value.phone, {
     message: "An email address or phone number is required",
   });
-const due = (approval) => {
-  const fee = Number(approval.fee_cents || 0);
-  if (approval.status === "waived") return 0;
-  const discount =
-    approval.discount_type === "amount"
-      ? Math.min(fee, Number(approval.discount_value || 0))
-      : approval.discount_type === "percent"
-        ? Math.round((fee * Number(approval.discount_value || 0)) / 100)
-        : 0;
-  return Math.max(0, fee - discount);
+async function paymentForKey(key) {
+  return db("approvals as a")
+    .join("vendors as v", "v.id", "a.vendor_id")
+    .join("markets as m", "m.id", "a.market_id")
+    .join("market_dates as d", "d.id", "a.market_date_id")
+    .where("a.payment_key", key)
+    .select(
+      "a.*",
+      "v.business_name",
+      "v.contact_name",
+      "m.name as market_name",
+      "m.payment_methods",
+      "d.event_date",
+    )
+    .first();
+}
+const paymentMethods = (market) => {
+  try {
+    return Array.isArray(market.payment_methods)
+      ? market.payment_methods
+      : JSON.parse(market.payment_methods || "[]");
+  } catch {
+    return [];
+  }
 };
 
 router.get(
@@ -113,6 +130,54 @@ router.post(
     res.status(201).json({
       subscriber: await db("newsletter_subscribers").where({ id }).first(),
     });
+  }),
+);
+
+router.get(
+  "/payment/:key",
+  asyncHandler(async (req, res) => {
+    const approval = await paymentForKey(req.params.key);
+    if (!approval) throw new ApiError(404, "This payment link is unavailable");
+    res.json({
+      payment: {
+        business_name: approval.business_name,
+        contact_name: approval.contact_name,
+        market_name: approval.market_name,
+        event_date: approval.event_date,
+        amount_due_cents: due(approval),
+        status: approval.status,
+        payment_methods: paymentMethods(approval),
+        online_checkout_available: ["awaiting_payment", "held"].includes(
+          approval.status,
+        ),
+      },
+    });
+  }),
+);
+router.post(
+  "/payment/:key/checkout",
+  asyncHandler(async (req, res) => {
+    const approval = await paymentForKey(req.params.key);
+    if (!approval) throw new ApiError(404, "This payment link is unavailable");
+    if (approval.status === "paid")
+      throw new ApiError(400, "This market fee has already been paid");
+    if (!["awaiting_payment", "held"].includes(approval.status))
+      throw new ApiError(400, "This payment link is not currently active");
+    const amountCents = due(approval);
+    if (!amountCents)
+      throw new ApiError(400, "No payment is due for this approval");
+    const base = config.appBaseUrl.replace(/\/$/, "");
+    const session = await stripe.createCheckoutSession(approval.org_id, {
+      amountCents,
+      name: `${approval.market_name} vendor fee`,
+      successUrl: `${base}/#/payment/${req.params.key}?success=1`,
+      cancelUrl: `${base}/#/payment/${req.params.key}?cancelled=1`,
+      metadata: {
+        approval_id: String(approval.id),
+        org_id: String(approval.org_id),
+      },
+    });
+    res.json({ checkout_url: session.url });
   }),
 );
 

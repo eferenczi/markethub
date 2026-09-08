@@ -213,6 +213,9 @@ export const api = {
     }),
   getPublicEventBoard: (key) =>
     request(`/public/event-board/${key}`, { auth: false }),
+  getPublicPayment: (key) => request(`/public/payment/${key}`, { auth: false }),
+  createPublicCheckout: (key) =>
+    request(`/public/payment/${key}/checkout`, { method: "POST", auth: false }),
   getPublicSubscribe: (key) =>
     request(`/public/subscribe/${key}`, { auth: false }),
   submitPublicSubscribe: (key, body) =>
@@ -232,6 +235,8 @@ export const api = {
     ),
   updateApplication: (id, body) =>
     request(`/applications/${id}`, { method: "PATCH", body }),
+  approveVendorApplication: (id, body = {}) =>
+    request(`/applications/${id}/approve`, { method: "POST", body }),
   getApplicationAsset: (applicationId, assetId) =>
     requestFile(`/applications/${applicationId}/assets/${assetId}`),
   rotateApplicationLink: () =>

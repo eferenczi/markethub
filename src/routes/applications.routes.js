@@ -7,6 +7,7 @@ const { validate } = require("../middleware/validate");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const { insertId } = require("../utils/insert-id");
+const notifications = require("../services/vendor-notifications");
 
 const router = express.Router();
 const APPLICATION_STATUSES = [
@@ -200,15 +201,13 @@ router.post(
       return trx("vendor_applications").where({ id: applicationId }).first();
     });
 
-    res
-      .status(201)
-      .json({
-        application: {
-          id: application.id,
-          status: application.status,
-          submitted_at: application.submitted_at,
-        },
-      });
+    res.status(201).json({
+      application: {
+        id: application.id,
+        status: application.status,
+        submitted_at: application.submitted_at,
+      },
+    });
   }),
 );
 
@@ -296,6 +295,95 @@ router.patch(
       .where({ id: application.id })
       .first();
     res.json({ application: updated });
+  }),
+);
+
+// Approving a submitted application turns it into a dated event enrollment,
+// creates a payment request, and queues the vendor email automatically.
+router.post(
+  "/:id/approve",
+  requireRole("owner", "manager", "staff"),
+  validate(
+    z.object({ market_date_id: z.number().int().positive().optional() }),
+  ),
+  asyncHandler(async (req, res) => {
+    const application = await applicationForOrg(req.user.org_id, req.params.id);
+    const eventDate = req.body.market_date_id
+      ? await db("market_dates")
+          .where({
+            id: req.body.market_date_id,
+            org_id: req.user.org_id,
+            market_id: application.market_id,
+          })
+          .first()
+      : await db("market_dates")
+          .where({ org_id: req.user.org_id, market_id: application.market_id })
+          .whereNot("status", "skipped")
+          .where("event_date", ">=", new Date().toISOString().slice(0, 10))
+          .orderBy("event_date")
+          .first();
+    if (!eventDate)
+      throw new ApiError(
+        400,
+        "Add an upcoming event date to this market before approving the vendor",
+      );
+    const market = await db("markets")
+      .where({ id: application.market_id, org_id: req.user.org_id })
+      .first();
+    const existing = await db("approvals")
+      .where({ vendor_id: application.vendor_id, market_date_id: eventDate.id })
+      .first();
+    const feeCents = Math.round(
+      Number(
+        application.booth_type === "truck"
+          ? market.truck_fee
+          : market.booth_fee,
+      ) * 100,
+    );
+    const paymentKey = existing?.payment_key || publicKey();
+    const approvalId = existing
+      ? existing.id
+      : await insertId(db, "approvals", {
+          org_id: req.user.org_id,
+          vendor_id: application.vendor_id,
+          market_id: application.market_id,
+          market_date_id: eventDate.id,
+          booth_type: application.booth_type || "tent",
+          fee_cents: feeCents,
+        });
+    await db.transaction(async (trx) => {
+      await trx("vendor_applications")
+        .where({ id: application.id })
+        .update({ status: "approved", updated_at: new Date().toISOString() });
+      await trx("vendors")
+        .where({ id: application.vendor_id })
+        .update({ stage: "Approved" });
+      await trx("vendor_markets")
+        .where({
+          org_id: application.org_id,
+          vendor_id: application.vendor_id,
+          market_id: application.market_id,
+        })
+        .update({ stage_override: "Approved" });
+      await trx("approvals")
+        .where({ id: approvalId })
+        .update({
+          status: "awaiting_payment",
+          payment_key: paymentKey,
+          payment_deadline_at: new Date(
+            Date.now() + 24 * 60 * 60 * 1000,
+          ).toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+    });
+    await notifications.queuePaymentRequest(approvalId, req.user.org_id);
+    res.json({
+      application: await db("vendor_applications")
+        .where({ id: application.id })
+        .first(),
+      approval: await db("approvals").where({ id: approvalId }).first(),
+      event_date: eventDate.event_date,
+    });
   }),
 );
 

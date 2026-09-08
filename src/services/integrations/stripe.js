@@ -28,12 +28,47 @@ async function createPaymentIntent(orgId, amountDollars, metadata = {}) {
   });
 }
 
+async function createCheckoutSession(
+  orgId,
+  { amountCents, name, successUrl, cancelUrl, metadata = {} },
+) {
+  const { stripe } = await clientFor(orgId);
+  return stripe.checkout.sessions.create({
+    mode: "payment",
+    payment_method_types: ["card"],
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          product_data: { name },
+          unit_amount: amountCents,
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    metadata,
+    payment_intent_data: { metadata },
+  });
+}
+
 // Verify an incoming webhook using the org's stored webhook secret.
 async function constructEvent(orgId, rawBody, signature) {
   const creds = await getCredentials(orgId, "stripe");
-  if (!creds || !creds.webhook_secret) throw new ApiError(400, "No Stripe webhook secret configured");
+  if (!creds || !creds.webhook_secret)
+    throw new ApiError(400, "No Stripe webhook secret configured");
   const stripe = Stripe(creds.secret_key || "sk_placeholder");
-  return stripe.webhooks.constructEvent(rawBody, signature, creds.webhook_secret);
+  return stripe.webhooks.constructEvent(
+    rawBody,
+    signature,
+    creds.webhook_secret,
+  );
 }
 
-module.exports = { test, createPaymentIntent, constructEvent };
+module.exports = {
+  test,
+  createPaymentIntent,
+  createCheckoutSession,
+  constructEvent,
+};

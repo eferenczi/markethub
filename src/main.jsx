@@ -17,6 +17,7 @@ import ApplicationPage from "./ApplicationPage.jsx";
 import AcknowledgmentPage from "./AcknowledgmentPage.jsx";
 import EventBoardPage from "./EventBoardPage.jsx";
 import SubscribePage from "./SubscribePage.jsx";
+import PaymentPage from "./PaymentPage.jsx";
 import BillingPage from "./BillingPage.jsx";
 import { api } from "./api";
 import { isNative } from "./native";
@@ -125,6 +126,9 @@ function Root() {
   const subscribeKey = hash.startsWith("subscribe/")
     ? hash.slice("subscribe/".length).split("/")[0]
     : "";
+  const paymentKey = hash.startsWith("payment/")
+    ? hash.slice("payment/".length).split(/[/?]/)[0]
+    : "";
 
   if (applicationKey)
     return <ApplicationPage applicationKey={applicationKey} />;
@@ -132,6 +136,7 @@ function Root() {
     return <AcknowledgmentPage acknowledgmentKey={acknowledgmentKey} />;
   if (boardKey) return <EventBoardPage boardKey={boardKey} />;
   if (subscribeKey) return <SubscribePage subscribeKey={subscribeKey} />;
+  if (paymentKey) return <PaymentPage paymentKey={paymentKey} />;
 
   const loadBilling = useCallback(async () => {
     try {

@@ -7,6 +7,7 @@ const { validate } = require("../middleware/validate");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const { insertId } = require("../utils/insert-id");
+const notifications = require("../services/vendor-notifications");
 
 const router = express.Router();
 router.use(requireAuth, requireActiveSubscription);
@@ -393,6 +394,8 @@ router.patch(
       patch.payment_deadline_at = null;
     }
     await db("approvals").where({ id: approval.id }).update(patch);
+    if (patch.status === "paid")
+      await notifications.queuePaidLoadIn(approval.id, req.user.org_id);
     res.json({
       approval: approvalSummary(
         await db("approvals").where({ id: approval.id }).first(),
@@ -409,11 +412,15 @@ router.post(
     const payment_deadline_at = new Date(
       Date.now() + 24 * 60 * 60 * 1000,
     ).toISOString();
+    const payment_key =
+      approval.payment_key || crypto.randomBytes(18).toString("base64url");
     await db("approvals").where({ id: approval.id }).update({
       status: "awaiting_payment",
       payment_deadline_at,
+      payment_key,
       updated_at: new Date().toISOString(),
     });
+    await notifications.queuePaymentRequest(approval.id, req.user.org_id);
     res.json({
       approval: approvalSummary(
         await db("approvals").where({ id: approval.id }).first(),
@@ -475,14 +482,12 @@ router.post(
       req.body.processing_fee_cents === undefined
         ? processingFee(req.body.payment_method, amount_due_cents)
         : req.body.processing_fee_cents;
-    await db("approvals").where({ id: approval.id }).update({
-      status: "paid",
-      payment_method: req.body.payment_method,
+    await notifications.markApprovalPaid(
+      approval.id,
+      req.user.org_id,
+      req.body.payment_method,
       processing_fee_cents,
-      paid_at: new Date().toISOString(),
-      payment_deadline_at: null,
-      updated_at: new Date().toISOString(),
-    });
+    );
     res.json({
       approval: approvalSummary(
         await db("approvals").where({ id: approval.id }).first(),

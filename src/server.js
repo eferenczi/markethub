@@ -23,6 +23,7 @@ const applicationsRoutes = require("./routes/applications.routes");
 const campaignsRoutes = require("./routes/campaigns.routes");
 const templatesRoutes = require("./routes/templates.routes");
 const publicRoutes = require("./routes/public.routes");
+const vendorNotifications = require("./services/vendor-notifications");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -167,6 +168,17 @@ if (require.main === module) {
   campaignsRoutes
     .processDueCampaigns()
     .catch((error) => console.error("Campaign delivery error", error));
+  const vendorNotificationTimer = setInterval(
+    () =>
+      vendorNotifications
+        .processDueVendorNotifications()
+        .catch((error) => console.error("Vendor notification error", error)),
+    60_000,
+  );
+  vendorNotificationTimer.unref();
+  vendorNotifications
+    .processDueVendorNotifications()
+    .catch((error) => console.error("Vendor notification error", error));
 
   // Graceful shutdown: stop accepting connections, close the DB, then exit.
   const shutdown = (signal) => {
