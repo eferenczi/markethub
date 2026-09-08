@@ -1,5 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, Check, CreditCard, DollarSign, Grip, ImagePlus, Loader2, MapPinned, Plus, Save, Send, Trash2, Truck, Upload } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  CreditCard,
+  DollarSign,
+  Grip,
+  ImagePlus,
+  Loader2,
+  MapPinned,
+  Plus,
+  Save,
+  Send,
+  Trash2,
+  Truck,
+  Upload,
+} from "lucide-react";
 import { api } from "./api";
 import { C, FD } from "./theme";
 import MapEditor from "./MapEditor.jsx";
@@ -7,13 +22,47 @@ import EventQuestions from "./EventQuestions.jsx";
 import EventDownloads from "./EventDownloads.jsx";
 
 const inp = { background: C.card, border: `1px solid ${C.line}`, color: C.ink };
-const METHODS = ["stripe", "applepay", "googlepay", "paypal", "venmo", "zelle", "cash", "other"];
+const METHODS = [
+  "stripe",
+  "applepay",
+  "googlepay",
+  "paypal",
+  "venmo",
+  "zelle",
+  "cash",
+  "other",
+];
 const money = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
-const title = (value) => ({ pending: "Application", awaiting_payment: "Awaiting payment", held: "Spot held", paid: "Paid", released: "Released" }[value] || value);
+const title = (value) =>
+  ({
+    pending: "Pending",
+    awaiting_payment: "Unpaid",
+    held: "Unpaid · spot held",
+    paid: "Paid",
+    waived: "Waived",
+    rejected: "Rejected",
+    released: "Released",
+  })[value] || value;
 
 function Status({ value }) {
-  const style = value === "paid" ? { background: C.sageSoft, color: C.pine } : value === "held" ? { background: C.berrySoft, color: C.berry } : value === "awaiting_payment" ? { background: C.honeySoft, color: C.honeyDeep } : { background: C.paper2, color: C.sub };
-  return <span style={style} className="text-[10.5px] font-bold px-2 py-1 rounded-full">{title(value)}</span>;
+  const style =
+    value === "paid" || value === "waived"
+      ? { background: C.sageSoft, color: C.pine }
+      : value === "rejected"
+        ? { background: C.dangerSoft, color: C.danger }
+        : value === "held"
+          ? { background: C.berrySoft, color: C.berry }
+          : value === "awaiting_payment"
+            ? { background: C.honeySoft, color: C.honeyDeep }
+            : { background: C.paper2, color: C.sub };
+  return (
+    <span
+      style={style}
+      className="text-[10.5px] font-bold px-2 py-1 rounded-full"
+    >
+      {title(value)}
+    </span>
+  );
 }
 
 function Payments({ approvals, vendors, dateId, canWrite, refresh, notify }) {
@@ -22,71 +71,1044 @@ function Payments({ approvals, vendors, dateId, canWrite, refresh, notify }) {
   const add = async () => {
     if (!vendorId) return notify("Choose a vendor first", "err");
     setBusy("add");
-    try { await api.createApproval({ vendor_id: Number(vendorId), market_date_id: Number(dateId) }); setVendorId(""); await refresh(); notify("Vendor added to this market date"); } catch (error) { notify(error.message, "err"); } finally { setBusy(""); }
+    try {
+      await api.createApproval({
+        vendor_id: Number(vendorId),
+        market_date_id: Number(dateId),
+      });
+      setVendorId("");
+      await refresh();
+      notify("Vendor added to this market date");
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      setBusy("");
+    }
   };
   const action = async (approval, change, message) => {
     setBusy(String(approval.id));
-    try { await api.updateApproval(approval.id, change); await refresh(); notify(message); } catch (error) { notify(error.message, "err"); } finally { setBusy(""); }
+    try {
+      await api.updateApproval(approval.id, change);
+      await refresh();
+      notify(message);
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      setBusy("");
+    }
   };
   const approve = async (approval) => {
     setBusy(String(approval.id));
-    try { await api.approveApplication(approval.id); await refresh(); notify("Approved with a 24-hour payment window"); } catch (error) { notify(error.message, "err"); } finally { setBusy(""); }
+    try {
+      await api.approveApplication(approval.id);
+      await refresh();
+      notify("Approved with a 24-hour payment window");
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      setBusy("");
+    }
   };
   const remind = async (approval) => {
     setBusy(String(approval.id));
-    try { await api.sendPaymentReminder(approval.id); await refresh(); notify("Reminder recorded"); } catch (error) { notify(error.message, "err"); } finally { setBusy(""); }
+    try {
+      await api.sendPaymentReminder(approval.id);
+      await refresh();
+      notify("Reminder recorded");
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      setBusy("");
+    }
   };
   const record = async (approval, method) => {
     setBusy(String(approval.id));
-    try { await api.recordPayment(approval.id, method); await refresh(); notify(`Payment recorded via ${method}`); } catch (error) { notify(error.message, "err"); } finally { setBusy(""); }
+    try {
+      await api.recordPayment(approval.id, method);
+      await refresh();
+      notify(`Payment recorded via ${method}`);
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      setBusy("");
+    }
   };
-  return <div className="flex flex-col gap-3">
-    {canWrite && <div style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-4 flex flex-col sm:flex-row gap-2"><select value={vendorId} onChange={(event) => setVendorId(event.target.value)} style={inp} className="flex-1 px-3 py-2 rounded-lg text-[13px] outline-none"><option value="">Add a vendor to this market date…</option>{vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.business_name}{vendor.booth_type === "truck" ? " · food truck" : ""}</option>)}</select><button onClick={add} disabled={busy === "add"} style={{ background: C.honey, color: C.pineDeep }} className="px-4 py-2 rounded-lg text-[12.5px] font-bold flex items-center justify-center gap-1"><Plus size={15} /> Add application</button></div>}
-    {approvals.length === 0 && <p style={{ color: C.faint }} className="text-[13px] text-center py-8">No vendors are assigned to this market date yet.</p>}
-    {approvals.map((approval) => { const isBusy = busy === String(approval.id); const discountValue = approval.discount_type === "amount" ? Number(approval.discount_value || 0) / 100 : Number(approval.discount_value || 0); return <article key={approval.id} style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-4"><div className="flex gap-3 items-start"><div style={{ background: C.berry }} className="w-10 h-10 rounded-xl flex items-center justify-center"><Truck size={17} color="#fff" /></div><div className="flex-1 min-w-0"><div className="flex items-center gap-2 flex-wrap"><p style={{ fontFamily: FD }} className="text-[17px] font-semibold">{approval.business_name}</p><Status value={approval.status} /></div><p style={{ color: C.sub }} className="text-[12px]">{approval.booth_type} · {approval.contact_name || approval.email || approval.phone || "No contact details"}</p></div><span style={{ fontFamily: FD }} className="text-[18px] font-semibold">{money(approval.amount_due_cents)}</span></div>
-      {canWrite && <div className="grid sm:grid-cols-3 gap-2 mt-3"><select value={approval.discount_type || "none"} onChange={(event) => action(approval, { discount_type: event.target.value, discount_value: 0 }, "Discount updated")} style={inp} className="px-2.5 py-2 rounded-lg text-[12px] outline-none"><option value="none">No discount</option><option value="amount">Dollar discount</option><option value="percent">Percent discount</option></select>{approval.discount_type !== "none" && <input defaultValue={discountValue} onBlur={(event) => action(approval, { discount_value: approval.discount_type === "amount" ? Math.round(Number(event.target.value || 0) * 100) : Math.round(Number(event.target.value || 0)) }, "Discount saved")} type="number" min="0" max={approval.discount_type === "percent" ? 100 : undefined} placeholder={approval.discount_type === "amount" ? "Amount off $" : "Percent off"} style={inp} className="px-2.5 py-2 rounded-lg text-[12px] outline-none" />}
-        <select defaultValue="" onChange={(event) => { if (event.target.value) record(approval, event.target.value); }} style={inp} className="px-2.5 py-2 rounded-lg text-[12px] outline-none"><option value="">Record payment…</option>{METHODS.map((method) => <option key={method} value={method}>{method}</option>)}</select></div>}
-      {canWrite && <div className="flex flex-wrap gap-2 mt-3">{approval.status === "pending" && <button onClick={() => approve(approval)} disabled={isBusy} style={{ background: C.pine, color: "#fff" }} className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold flex items-center gap-1"><Check size={13} /> Approve</button>}{["awaiting_payment", "held"].includes(approval.status) && <><button onClick={() => remind(approval)} disabled={isBusy} style={{ background: C.honeySoft, color: C.honeyDeep }} className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold flex items-center gap-1"><Send size={13} /> Remind</button><button onClick={() => action(approval, { status: approval.status === "held" ? "awaiting_payment" : "held" }, approval.status === "held" ? "Payment hold released" : "Vendor spot held")} disabled={isBusy} style={{ background: C.berrySoft, color: C.berry }} className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold">{approval.status === "held" ? "Release hold" : "Hold spot"}</button></>}{approval.status === "paid" && <span style={{ color: C.pine }} className="text-[11.5px] font-bold py-1.5">Paid via {approval.payment_method || "payment"}</span>}</div>}</article>; })}
-  </div>;
+  return (
+    <div className="flex flex-col gap-3">
+      {canWrite && (
+        <div
+          style={{ background: C.card, border: `1px solid ${C.line}` }}
+          className="rounded-2xl p-4 flex flex-col sm:flex-row gap-2"
+        >
+          <select
+            value={vendorId}
+            onChange={(event) => setVendorId(event.target.value)}
+            style={inp}
+            className="flex-1 px-3 py-2 rounded-lg text-[13px] outline-none"
+          >
+            <option value="">Add a vendor to this market date…</option>
+            {vendors.map((vendor) => (
+              <option key={vendor.id} value={vendor.id}>
+                {vendor.business_name}
+                {vendor.booth_type === "truck" ? " · food truck" : ""}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={add}
+            disabled={busy === "add"}
+            style={{ background: C.honey, color: C.pineDeep }}
+            className="px-4 py-2 rounded-lg text-[12.5px] font-bold flex items-center justify-center gap-1"
+          >
+            <Plus size={15} /> Add application
+          </button>
+        </div>
+      )}
+      {approvals.length === 0 && (
+        <p style={{ color: C.faint }} className="text-[13px] text-center py-8">
+          No vendors are assigned to this market date yet.
+        </p>
+      )}
+      {approvals.map((approval) => {
+        const isBusy = busy === String(approval.id);
+        const discountValue =
+          approval.discount_type === "amount"
+            ? Number(approval.discount_value || 0) / 100
+            : Number(approval.discount_value || 0);
+        return (
+          <article
+            key={approval.id}
+            style={{ background: C.card, border: `1px solid ${C.line}` }}
+            className="rounded-2xl p-4"
+          >
+            <div className="flex gap-3 items-start">
+              <div
+                style={{ background: C.berry }}
+                className="w-10 h-10 rounded-xl flex items-center justify-center"
+              >
+                <Truck size={17} color="#fff" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p
+                    style={{ fontFamily: FD }}
+                    className="text-[17px] font-semibold"
+                  >
+                    {approval.business_name}
+                  </p>
+                  <Status value={approval.status} />
+                </div>
+                <p style={{ color: C.sub }} className="text-[12px]">
+                  {approval.booth_type} ·{" "}
+                  {approval.contact_name ||
+                    approval.email ||
+                    approval.phone ||
+                    "No contact details"}
+                </p>
+              </div>
+              <span
+                style={{ fontFamily: FD }}
+                className="text-[18px] font-semibold"
+              >
+                {money(approval.amount_due_cents)}
+              </span>
+            </div>
+            {canWrite &&
+              !["paid", "waived", "rejected"].includes(approval.status) && (
+                <div className="grid sm:grid-cols-3 gap-2 mt-3">
+                  <select
+                    value={approval.discount_type || "none"}
+                    onChange={(event) =>
+                      action(
+                        approval,
+                        {
+                          discount_type: event.target.value,
+                          discount_value: 0,
+                        },
+                        "Discount updated",
+                      )
+                    }
+                    style={inp}
+                    className="px-2.5 py-2 rounded-lg text-[12px] outline-none"
+                  >
+                    <option value="none">No discount</option>
+                    <option value="amount">Dollar discount</option>
+                    <option value="percent">Percent discount</option>
+                  </select>
+                  {approval.discount_type !== "none" && (
+                    <input
+                      defaultValue={discountValue}
+                      onBlur={(event) =>
+                        action(
+                          approval,
+                          {
+                            discount_value:
+                              approval.discount_type === "amount"
+                                ? Math.round(
+                                    Number(event.target.value || 0) * 100,
+                                  )
+                                : Math.round(Number(event.target.value || 0)),
+                          },
+                          "Discount saved",
+                        )
+                      }
+                      type="number"
+                      min="0"
+                      max={
+                        approval.discount_type === "percent" ? 100 : undefined
+                      }
+                      placeholder={
+                        approval.discount_type === "amount"
+                          ? "Amount off $"
+                          : "Percent off"
+                      }
+                      style={inp}
+                      className="px-2.5 py-2 rounded-lg text-[12px] outline-none"
+                    />
+                  )}
+                  <select
+                    defaultValue=""
+                    onChange={(event) => {
+                      if (event.target.value)
+                        record(approval, event.target.value);
+                    }}
+                    style={inp}
+                    className="px-2.5 py-2 rounded-lg text-[12px] outline-none"
+                  >
+                    <option value="">Record payment…</option>
+                    {METHODS.map((method) => (
+                      <option key={method} value={method}>
+                        {method}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            {canWrite && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {approval.status === "pending" && (
+                  <button
+                    onClick={() => approve(approval)}
+                    disabled={isBusy}
+                    style={{ background: C.pine, color: "#fff" }}
+                    className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold flex items-center gap-1"
+                  >
+                    <Check size={13} /> Approve
+                  </button>
+                )}
+                {!["paid", "waived", "rejected"].includes(approval.status) && (
+                  <>
+                    <button
+                      onClick={() =>
+                        action(
+                          approval,
+                          { status: "waived" },
+                          "Vendor fee waived",
+                        )
+                      }
+                      disabled={isBusy}
+                      style={{ background: C.sageSoft, color: C.pine }}
+                      className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold"
+                    >
+                      Waive fee
+                    </button>
+                    <button
+                      onClick={() =>
+                        action(
+                          approval,
+                          { status: "rejected" },
+                          "Application rejected",
+                        )
+                      }
+                      disabled={isBusy}
+                      style={{ background: C.dangerSoft, color: C.danger }}
+                      className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold"
+                    >
+                      Reject
+                    </button>
+                  </>
+                )}
+                {["awaiting_payment", "held"].includes(approval.status) && (
+                  <>
+                    <button
+                      onClick={() => remind(approval)}
+                      disabled={isBusy}
+                      style={{ background: C.honeySoft, color: C.honeyDeep }}
+                      className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold flex items-center gap-1"
+                    >
+                      <Send size={13} /> Remind
+                    </button>
+                    <button
+                      onClick={() =>
+                        action(
+                          approval,
+                          {
+                            status:
+                              approval.status === "held"
+                                ? "awaiting_payment"
+                                : "held",
+                          },
+                          approval.status === "held"
+                            ? "Payment hold released"
+                            : "Vendor spot held",
+                        )
+                      }
+                      disabled={isBusy}
+                      style={{ background: C.berrySoft, color: C.berry }}
+                      className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold"
+                    >
+                      {approval.status === "held"
+                        ? "Release hold"
+                        : "Hold spot"}
+                    </button>
+                  </>
+                )}
+                {approval.status === "paid" && (
+                  <span
+                    style={{ color: C.pine }}
+                    className="text-[11.5px] font-bold py-1.5"
+                  >
+                    Paid via {approval.payment_method || "payment"}
+                  </span>
+                )}
+                {["waived", "rejected"].includes(approval.status) && (
+                  <button
+                    onClick={() =>
+                      action(
+                        approval,
+                        { status: "awaiting_payment" },
+                        "Approval reopened as unpaid",
+                      )
+                    }
+                    disabled={isBusy}
+                    style={{ background: C.paper2, color: C.sub }}
+                    className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold"
+                  >
+                    Reopen
+                  </button>
+                )}
+              </div>
+            )}
+          </article>
+        );
+      })}
+    </div>
+  );
 }
 
 function BoothMap({ dateId, vendors, canWrite, notify }) {
-  const [layouts, setLayouts] = useState(null); const [layout, setLayout] = useState(null); const [spots, setSpots] = useState([]); const [saving, setSaving] = useState(false); const imageRef = useRef(null);
-  const load = async () => { try { const result = await api.getLayouts(dateId); setLayouts(result.layouts); const current = result.layouts[0] || null; setLayout(current); setSpots(current?.spots || []); } catch (error) { notify(error.message, "err"); } };
-  useEffect(() => { setLayouts(null); setLayout(null); setSpots([]); load(); }, [dateId]);
-  const readImage = (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
-  const uploadMap = async (event) => { const file = event.target.files?.[0]; event.target.value = ""; if (!file) return; if (!file.type.startsWith("image/")) return notify("Choose an image file", "err"); if (file.size > 3_000_000) return notify("Map image must be 3 MB or smaller", "err"); const venue_image = await readImage(file); if (layout) { try { const result = await api.updateLayout(layout.id, { venue_image, spots }); setLayout(result.layout); setSpots(result.layout.spots); notify("Map image saved"); } catch (error) { notify(error.message, "err"); } } else { setLayout({ name: "Floor plan", venue_image }); notify("Map image ready—add spots and save the layout"); } };
-  const addSpot = (kind) => setSpots((current) => [...current, { code: `${kind === "truck" ? "F" : "B"}${current.length + 1}`, kind, vendor_id: null, x: 12 + (current.length % 5) * 15, y: 12 + (Math.floor(current.length / 5) % 4) * 18, width: kind === "truck" ? 16 : 10, height: kind === "truck" ? 10 : 8, rotation: 0, sort_order: current.length }]);
-  const patchSpot = (index, patch) => setSpots((current) => current.map((spot, i) => i === index ? { ...spot, ...patch } : spot));
-  const save = async () => { if (!layout?.venue_image && !imageRef.current?.files?.[0]) return notify("Upload a map image first", "err"); setSaving(true); try { const body = { venue_image: layout?.venue_image || null, spots }; const result = layout?.id ? await api.updateLayout(layout.id, body) : await api.createLayout({ market_date_id: Number(dateId), name: layout?.name || "Floor plan", ...body }); setLayout(result.layout); setSpots(result.layout.spots); notify("Booth map saved"); } catch (error) { notify(error.message, "err"); } finally { setSaving(false); } };
-  if (!layouts) return <div style={{ color: C.sub }} className="text-[13px] py-7"><Loader2 size={15} className="inline animate-spin mr-2" />Loading map…</div>;
-  return <div className="flex flex-col gap-3"><div style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-4 flex flex-wrap gap-2 items-center"><label style={{ background: C.paper2, color: C.ink }} className="px-3 py-2 rounded-lg text-[12px] font-bold cursor-pointer flex items-center gap-1"><ImagePlus size={14} /> Upload venue map<input ref={imageRef} type="file" accept="image/*" className="hidden" onChange={uploadMap} /></label>{canWrite && <><button onClick={() => addSpot("tent")} style={{ background: C.sageSoft, color: C.pine }} className="px-3 py-2 rounded-lg text-[12px] font-bold">+ Tent</button><button onClick={() => addSpot("truck")} style={{ background: C.honeySoft, color: C.honeyDeep }} className="px-3 py-2 rounded-lg text-[12px] font-bold">+ Food truck</button><button onClick={save} disabled={saving} style={{ background: C.pine, color: "#fff" }} className="ml-auto px-3 py-2 rounded-lg text-[12px] font-bold flex items-center gap-1"><Save size={14} /> {saving ? "Saving…" : "Save map"}</button></>}</div>
-    <div style={{ background: C.paper2, minHeight: 420, backgroundImage: layout?.venue_image ? `url(${layout.venue_image})` : "none", backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} className="rounded-2xl relative overflow-hidden border border-[#DED9CC]">{!layout?.venue_image && <div className="absolute inset-0 flex items-center justify-center text-center p-6"><div><MapPinned size={38} color={C.faint} className="mx-auto mb-2" /><p style={{ color: C.sub }} className="text-[13px]">Upload a venue map, then add and position numbered tent or food-truck spots.</p></div></div>}{spots.map((spot, index) => <div key={index} style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, background: spot.kind === "truck" ? C.honey : C.pine, transform: `rotate(${spot.rotation || 0}deg)` }} className="absolute rounded-md shadow-lg text-white p-1.5 min-w-[48px]"><div className="flex items-center gap-1 text-[10px] font-bold"><Grip size={11} /> {spot.code}</div><select value={spot.vendor_id || ""} onChange={(event) => patchSpot(index, { vendor_id: event.target.value ? Number(event.target.value) : null })} className="mt-1 w-full text-[9px] text-black rounded px-1 py-0.5"><option value="">Unassigned</option>{vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.business_name}</option>)}</select><div className="flex gap-1 mt-1"><button onClick={() => patchSpot(index, { x: Math.max(0, spot.x - 2) })}>←</button><button onClick={() => patchSpot(index, { x: Math.min(95, spot.x + 2) })}>→</button><button onClick={() => patchSpot(index, { y: Math.max(0, spot.y - 2) })}>↑</button><button onClick={() => patchSpot(index, { y: Math.min(95, spot.y + 2) })}>↓</button></div></div>)}</div></div>;
+  const [layouts, setLayouts] = useState(null);
+  const [layout, setLayout] = useState(null);
+  const [spots, setSpots] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const imageRef = useRef(null);
+  const load = async () => {
+    try {
+      const result = await api.getLayouts(dateId);
+      setLayouts(result.layouts);
+      const current = result.layouts[0] || null;
+      setLayout(current);
+      setSpots(current?.spots || []);
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  };
+  useEffect(() => {
+    setLayouts(null);
+    setLayout(null);
+    setSpots([]);
+    load();
+  }, [dateId]);
+  const readImage = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  const uploadMap = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/"))
+      return notify("Choose an image file", "err");
+    if (file.size > 3_000_000)
+      return notify("Map image must be 3 MB or smaller", "err");
+    const venue_image = await readImage(file);
+    if (layout) {
+      try {
+        const result = await api.updateLayout(layout.id, {
+          venue_image,
+          spots,
+        });
+        setLayout(result.layout);
+        setSpots(result.layout.spots);
+        notify("Map image saved");
+      } catch (error) {
+        notify(error.message, "err");
+      }
+    } else {
+      setLayout({ name: "Floor plan", venue_image });
+      notify("Map image ready—add spots and save the layout");
+    }
+  };
+  const addSpot = (kind) =>
+    setSpots((current) => [
+      ...current,
+      {
+        code: `${kind === "truck" ? "F" : "B"}${current.length + 1}`,
+        kind,
+        vendor_id: null,
+        x: 12 + (current.length % 5) * 15,
+        y: 12 + (Math.floor(current.length / 5) % 4) * 18,
+        width: kind === "truck" ? 16 : 10,
+        height: kind === "truck" ? 10 : 8,
+        rotation: 0,
+        sort_order: current.length,
+      },
+    ]);
+  const patchSpot = (index, patch) =>
+    setSpots((current) =>
+      current.map((spot, i) => (i === index ? { ...spot, ...patch } : spot)),
+    );
+  const save = async () => {
+    if (!layout?.venue_image && !imageRef.current?.files?.[0])
+      return notify("Upload a map image first", "err");
+    setSaving(true);
+    try {
+      const body = { venue_image: layout?.venue_image || null, spots };
+      const result = layout?.id
+        ? await api.updateLayout(layout.id, body)
+        : await api.createLayout({
+            market_date_id: Number(dateId),
+            name: layout?.name || "Floor plan",
+            ...body,
+          });
+      setLayout(result.layout);
+      setSpots(result.layout.spots);
+      notify("Booth map saved");
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      setSaving(false);
+    }
+  };
+  if (!layouts)
+    return (
+      <div style={{ color: C.sub }} className="text-[13px] py-7">
+        <Loader2 size={15} className="inline animate-spin mr-2" />
+        Loading map…
+      </div>
+    );
+  return (
+    <div className="flex flex-col gap-3">
+      <div
+        style={{ background: C.card, border: `1px solid ${C.line}` }}
+        className="rounded-2xl p-4 flex flex-wrap gap-2 items-center"
+      >
+        <label
+          style={{ background: C.paper2, color: C.ink }}
+          className="px-3 py-2 rounded-lg text-[12px] font-bold cursor-pointer flex items-center gap-1"
+        >
+          <ImagePlus size={14} /> Upload venue map
+          <input
+            ref={imageRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={uploadMap}
+          />
+        </label>
+        {canWrite && (
+          <>
+            <button
+              onClick={() => addSpot("tent")}
+              style={{ background: C.sageSoft, color: C.pine }}
+              className="px-3 py-2 rounded-lg text-[12px] font-bold"
+            >
+              + Tent
+            </button>
+            <button
+              onClick={() => addSpot("truck")}
+              style={{ background: C.honeySoft, color: C.honeyDeep }}
+              className="px-3 py-2 rounded-lg text-[12px] font-bold"
+            >
+              + Food truck
+            </button>
+            <button
+              onClick={save}
+              disabled={saving}
+              style={{ background: C.pine, color: "#fff" }}
+              className="ml-auto px-3 py-2 rounded-lg text-[12px] font-bold flex items-center gap-1"
+            >
+              <Save size={14} /> {saving ? "Saving…" : "Save map"}
+            </button>
+          </>
+        )}
+      </div>
+      <div
+        style={{
+          background: C.paper2,
+          minHeight: 420,
+          backgroundImage: layout?.venue_image
+            ? `url(${layout.venue_image})`
+            : "none",
+          backgroundSize: "contain",
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "center",
+        }}
+        className="rounded-2xl relative overflow-hidden border border-[#DED9CC]"
+      >
+        {!layout?.venue_image && (
+          <div className="absolute inset-0 flex items-center justify-center text-center p-6">
+            <div>
+              <MapPinned size={38} color={C.faint} className="mx-auto mb-2" />
+              <p style={{ color: C.sub }} className="text-[13px]">
+                Upload a venue map, then add and position numbered tent or
+                food-truck spots.
+              </p>
+            </div>
+          </div>
+        )}
+        {spots.map((spot, index) => (
+          <div
+            key={index}
+            style={{
+              left: `${spot.x}%`,
+              top: `${spot.y}%`,
+              width: `${spot.width}%`,
+              height: `${spot.height}%`,
+              background: spot.kind === "truck" ? C.honey : C.pine,
+              transform: `rotate(${spot.rotation || 0}deg)`,
+            }}
+            className="absolute rounded-md shadow-lg text-white p-1.5 min-w-[48px]"
+          >
+            <div className="flex items-center gap-1 text-[10px] font-bold">
+              <Grip size={11} /> {spot.code}
+            </div>
+            <select
+              value={spot.vendor_id || ""}
+              onChange={(event) =>
+                patchSpot(index, {
+                  vendor_id: event.target.value
+                    ? Number(event.target.value)
+                    : null,
+                })
+              }
+              className="mt-1 w-full text-[9px] text-black rounded px-1 py-0.5"
+            >
+              <option value="">Unassigned</option>
+              {vendors.map((vendor) => (
+                <option key={vendor.id} value={vendor.id}>
+                  {vendor.business_name}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-1 mt-1">
+              <button
+                onClick={() => patchSpot(index, { x: Math.max(0, spot.x - 2) })}
+              >
+                ←
+              </button>
+              <button
+                onClick={() =>
+                  patchSpot(index, { x: Math.min(95, spot.x + 2) })
+                }
+              >
+                →
+              </button>
+              <button
+                onClick={() => patchSpot(index, { y: Math.max(0, spot.y - 2) })}
+              >
+                ↑
+              </button>
+              <button
+                onClick={() =>
+                  patchSpot(index, { y: Math.min(95, spot.y + 2) })
+                }
+              >
+                ↓
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Reports({ approvals, markets, canWrite, notify }) {
   const [expenses, setExpenses] = useState([]);
-  const [form, setForm] = useState({ market_id: "", category: "", amount: "", expense_date: new Date().toISOString().slice(0, 10), note: "" });
-  const load = async () => { try { setExpenses((await api.getExpenses()).expenses); } catch (error) { notify(error.message, "err"); } };
-  useEffect(() => { load(); }, []);
-  const addExpense = async () => {
-    if (!form.market_id || !form.category.trim() || !Number(form.amount)) return notify("Choose a market, category, and amount", "err");
-    try { await api.createExpense({ market_id: Number(form.market_id), category: form.category.trim(), amount_cents: Math.round(Number(form.amount) * 100), expense_date: form.expense_date, note: form.note }); setForm((current) => ({ ...current, category: "", amount: "", note: "" })); await load(); notify("Expense saved"); } catch (error) { notify(error.message, "err"); }
+  const [form, setForm] = useState({
+    market_id: "",
+    category: "",
+    amount: "",
+    expense_date: new Date().toISOString().slice(0, 10),
+    note: "",
+  });
+  const load = async () => {
+    try {
+      setExpenses((await api.getExpenses()).expenses);
+    } catch (error) {
+      notify(error.message, "err");
+    }
   };
-  const removeExpense = async (id) => { try { await api.deleteExpense(id); await load(); notify("Expense removed"); } catch (error) { notify(error.message, "err"); } };
-  const rows = markets.map((market) => { const items = approvals.filter((approval) => approval.market_id === market.id); const collected = items.filter((approval) => approval.status === "paid").reduce((sum, approval) => sum + Number(approval.amount_due_cents || 0), 0); const outstanding = items.filter((approval) => ["awaiting_payment", "held"].includes(approval.status)).reduce((sum, approval) => sum + Number(approval.amount_due_cents || 0), 0); const spent = expenses.filter((expense) => expense.market_id === market.id).reduce((sum, expense) => sum + Number(expense.amount_cents || 0), 0); return { market, items, collected, outstanding, spent }; });
-  const collected = rows.reduce((sum, row) => sum + row.collected, 0); const outstanding = rows.reduce((sum, row) => sum + row.outstanding, 0); const spent = rows.reduce((sum, row) => sum + row.spent, 0); const discounts = approvals.reduce((sum, approval) => sum + (approval.discount_type === "amount" ? Number(approval.discount_value || 0) : Math.round((Number(approval.fee_cents || 0) * Number(approval.discount_value || 0)) / 100)), 0);
-  return <div className="flex flex-col gap-4"><div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">{[["Collected", collected, C.pine], ["Outstanding", outstanding, C.honeyDeep], ["Expenses", spent, C.berry], ["Net collected", collected - spent, C.ink]].map(([label, value, tone]) => <div key={label} style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-4"><p style={{ color: tone, fontFamily: FD }} className="text-[25px] font-semibold">{money(value)}</p><p style={{ color: C.sub }} className="text-[12px] mt-1">{label}</p></div>)}</div><div style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-4"><p style={{ fontFamily: FD }} className="text-[18px] font-semibold mb-3">By market</p>{rows.map((row) => <div key={row.market.id} className="grid grid-cols-4 py-2.5 border-b last:border-0 gap-2" style={{ borderColor: C.line }}><span className="text-[12.5px] font-semibold truncate">{row.market.name}</span><span style={{ color: C.pine }} className="text-[12px] font-bold">{money(row.collected)} in</span><span style={{ color: C.berry }} className="text-[12px] font-bold">{money(row.spent)} out</span><span style={{ color: C.honeyDeep }} className="text-[12px] font-bold">{money(row.outstanding)} due</span></div>)}<p style={{ color: C.sub }} className="text-[11px] mt-3">Discounts given: {money(discounts)}</p></div>{canWrite && <section style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-4"><p style={{ fontFamily: FD }} className="text-[18px] font-semibold">Expense ledger</p><div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-2 mt-3"><select value={form.market_id} onChange={(event) => setForm((current) => ({ ...current, market_id: event.target.value }))} style={inp} className="px-3 py-2 rounded-lg text-[12px] outline-none"><option value="">Market</option>{markets.map((market) => <option key={market.id} value={market.id}>{market.name}</option>)}</select><input value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} placeholder="Category (e.g. permits)" style={inp} className="px-3 py-2 rounded-lg text-[12px] outline-none" /><input value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} type="number" min="0.01" step="0.01" placeholder="Amount" style={inp} className="px-3 py-2 rounded-lg text-[12px] outline-none" /><input value={form.expense_date} onChange={(event) => setForm((current) => ({ ...current, expense_date: event.target.value }))} type="date" style={inp} className="px-3 py-2 rounded-lg text-[12px] outline-none" /><button onClick={addExpense} style={{ background: C.pine, color: "#fff" }} className="px-3 py-2 rounded-lg text-[12px] font-bold">Add expense</button></div><input value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} placeholder="Optional note" style={inp} className="mt-2 w-full px-3 py-2 rounded-lg text-[12px] outline-none" /><div className="mt-3 flex flex-col gap-1.5">{expenses.slice(0, 12).map((expense) => <div key={expense.id} style={{ background: C.paper2 }} className="rounded-lg px-3 py-2 flex items-center gap-2"><span className="flex-1 text-[12px] font-semibold">{expense.category}<span style={{ color: C.sub }} className="font-normal"> · {markets.find((market) => market.id === expense.market_id)?.name || "Market"}</span></span><span style={{ color: C.berry }} className="text-[12px] font-bold">{money(expense.amount_cents)}</span><button onClick={() => removeExpense(expense.id)} style={{ color: C.danger }}><Trash2 size={13} /></button></div>)}{expenses.length === 0 && <p style={{ color: C.faint }} className="text-[12px]">No expenses recorded yet.</p>}</div></section>}</div>;
+  useEffect(() => {
+    load();
+  }, []);
+  const addExpense = async () => {
+    if (!form.market_id || !form.category.trim() || !Number(form.amount))
+      return notify("Choose a market, category, and amount", "err");
+    try {
+      await api.createExpense({
+        market_id: Number(form.market_id),
+        category: form.category.trim(),
+        amount_cents: Math.round(Number(form.amount) * 100),
+        expense_date: form.expense_date,
+        note: form.note,
+      });
+      setForm((current) => ({
+        ...current,
+        category: "",
+        amount: "",
+        note: "",
+      }));
+      await load();
+      notify("Expense saved");
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  };
+  const removeExpense = async (id) => {
+    try {
+      await api.deleteExpense(id);
+      await load();
+      notify("Expense removed");
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  };
+  const rows = markets.map((market) => {
+    const items = approvals.filter(
+      (approval) => approval.market_id === market.id,
+    );
+    const collected = items
+      .filter((approval) => approval.status === "paid")
+      .reduce(
+        (sum, approval) => sum + Number(approval.amount_due_cents || 0),
+        0,
+      );
+    const outstanding = items
+      .filter((approval) =>
+        ["awaiting_payment", "held"].includes(approval.status),
+      )
+      .reduce(
+        (sum, approval) => sum + Number(approval.amount_due_cents || 0),
+        0,
+      );
+    const spent = expenses
+      .filter((expense) => expense.market_id === market.id)
+      .reduce((sum, expense) => sum + Number(expense.amount_cents || 0), 0);
+    return { market, items, collected, outstanding, spent };
+  });
+  const collected = rows.reduce((sum, row) => sum + row.collected, 0);
+  const outstanding = rows.reduce((sum, row) => sum + row.outstanding, 0);
+  const spent = rows.reduce((sum, row) => sum + row.spent, 0);
+  const discounts = approvals.reduce(
+    (sum, approval) =>
+      sum +
+      (approval.discount_type === "amount"
+        ? Number(approval.discount_value || 0)
+        : Math.round(
+            (Number(approval.fee_cents || 0) *
+              Number(approval.discount_value || 0)) /
+              100,
+          )),
+    0,
+  );
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        {[
+          ["Collected", collected, C.pine],
+          ["Outstanding", outstanding, C.honeyDeep],
+          ["Expenses", spent, C.berry],
+          ["Net collected", collected - spent, C.ink],
+        ].map(([label, value, tone]) => (
+          <div
+            key={label}
+            style={{ background: C.card, border: `1px solid ${C.line}` }}
+            className="rounded-2xl p-4"
+          >
+            <p
+              style={{ color: tone, fontFamily: FD }}
+              className="text-[25px] font-semibold"
+            >
+              {money(value)}
+            </p>
+            <p style={{ color: C.sub }} className="text-[12px] mt-1">
+              {label}
+            </p>
+          </div>
+        ))}
+      </div>
+      <div
+        style={{ background: C.card, border: `1px solid ${C.line}` }}
+        className="rounded-2xl p-4"
+      >
+        <p
+          style={{ fontFamily: FD }}
+          className="text-[18px] font-semibold mb-3"
+        >
+          By market
+        </p>
+        {rows.map((row) => (
+          <div
+            key={row.market.id}
+            className="grid grid-cols-4 py-2.5 border-b last:border-0 gap-2"
+            style={{ borderColor: C.line }}
+          >
+            <span className="text-[12.5px] font-semibold truncate">
+              {row.market.name}
+            </span>
+            <span style={{ color: C.pine }} className="text-[12px] font-bold">
+              {money(row.collected)} in
+            </span>
+            <span style={{ color: C.berry }} className="text-[12px] font-bold">
+              {money(row.spent)} out
+            </span>
+            <span
+              style={{ color: C.honeyDeep }}
+              className="text-[12px] font-bold"
+            >
+              {money(row.outstanding)} due
+            </span>
+          </div>
+        ))}
+        <p style={{ color: C.sub }} className="text-[11px] mt-3">
+          Discounts given: {money(discounts)}
+        </p>
+      </div>
+      {canWrite && (
+        <section
+          style={{ background: C.card, border: `1px solid ${C.line}` }}
+          className="rounded-2xl p-4"
+        >
+          <p style={{ fontFamily: FD }} className="text-[18px] font-semibold">
+            Expense ledger
+          </p>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-2 mt-3">
+            <select
+              value={form.market_id}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  market_id: event.target.value,
+                }))
+              }
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[12px] outline-none"
+            >
+              <option value="">Market</option>
+              {markets.map((market) => (
+                <option key={market.id} value={market.id}>
+                  {market.name}
+                </option>
+              ))}
+            </select>
+            <input
+              value={form.category}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  category: event.target.value,
+                }))
+              }
+              placeholder="Category (e.g. permits)"
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[12px] outline-none"
+            />
+            <input
+              value={form.amount}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  amount: event.target.value,
+                }))
+              }
+              type="number"
+              min="0.01"
+              step="0.01"
+              placeholder="Amount"
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[12px] outline-none"
+            />
+            <input
+              value={form.expense_date}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  expense_date: event.target.value,
+                }))
+              }
+              type="date"
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[12px] outline-none"
+            />
+            <button
+              onClick={addExpense}
+              style={{ background: C.pine, color: "#fff" }}
+              className="px-3 py-2 rounded-lg text-[12px] font-bold"
+            >
+              Add expense
+            </button>
+          </div>
+          <input
+            value={form.note}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, note: event.target.value }))
+            }
+            placeholder="Optional note"
+            style={inp}
+            className="mt-2 w-full px-3 py-2 rounded-lg text-[12px] outline-none"
+          />
+          <div className="mt-3 flex flex-col gap-1.5">
+            {expenses.slice(0, 12).map((expense) => (
+              <div
+                key={expense.id}
+                style={{ background: C.paper2 }}
+                className="rounded-lg px-3 py-2 flex items-center gap-2"
+              >
+                <span className="flex-1 text-[12px] font-semibold">
+                  {expense.category}
+                  <span style={{ color: C.sub }} className="font-normal">
+                    {" "}
+                    ·{" "}
+                    {markets.find((market) => market.id === expense.market_id)
+                      ?.name || "Market"}
+                  </span>
+                </span>
+                <span
+                  style={{ color: C.berry }}
+                  className="text-[12px] font-bold"
+                >
+                  {money(expense.amount_cents)}
+                </span>
+                <button
+                  onClick={() => removeExpense(expense.id)}
+                  style={{ color: C.danger }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+            {expenses.length === 0 && (
+              <p style={{ color: C.faint }} className="text-[12px]">
+                No expenses recorded yet.
+              </p>
+            )}
+          </div>
+        </section>
+      )}
+    </div>
+  );
 }
 
 export default function EventHub({ canWrite, notify }) {
-  const [markets, setMarkets] = useState(null); const [vendors, setVendors] = useState(null); const [marketId, setMarketId] = useState(""); const [dates, setDates] = useState([]); const [dateId, setDateId] = useState(""); const [approvals, setApprovals] = useState([]); const [newDate, setNewDate] = useState(""); const [view, setView] = useState("payments");
-  const loadDates = async (id, preferred) => { if (!id) return; try { const result = await api.getMarketDates(id); setDates(result.market_dates); setDateId(String(preferred || result.market_dates.find((date) => date.status !== "skipped")?.id || "")); } catch (error) { notify(error.message, "err"); } };
-  const refreshApprovals = async () => { if (!dateId) return; try { setApprovals((await api.getApprovals({ market_date_id: dateId })).approvals); } catch (error) { notify(error.message, "err"); } };
-  useEffect(() => { Promise.all([api.getMarkets(), api.getVendors(), api.getApprovals()]).then(([marketResult, vendorResult, approvalResult]) => { const active = marketResult.markets.filter((market) => !market.archived); setMarkets(active); setVendors(vendorResult.vendors); setApprovals(approvalResult.approvals); if (active[0]) setMarketId(String(active[0].id)); }).catch((error) => notify(error.message, "err")); }, []);
-  useEffect(() => { if (marketId) loadDates(marketId); }, [marketId]); useEffect(() => { refreshApprovals(); }, [dateId]);
-  const addDate = async () => { if (!newDate) return notify("Choose an event date", "err"); try { const result = await api.createMarketDate({ market_id: Number(marketId), event_date: newDate }); setNewDate(""); await loadDates(marketId, result.market_date.id); notify("Event date saved"); } catch (error) { notify(error.message, "err"); } };
-  if (!markets || !vendors) return <div style={{ color: C.sub }} className="py-8"><Loader2 size={16} className="inline animate-spin mr-2" />Loading events…</div>;
-  const selected = dates.find((date) => String(date.id) === String(dateId)); const scopedApprovals = selected ? approvals : [];
-  return <div className="flex flex-col gap-4"><section style={{ background: C.card, border: `1px solid ${C.line}` }} className="rounded-2xl p-4"><div className="grid sm:grid-cols-2 gap-2"><select value={marketId} onChange={(event) => setMarketId(event.target.value)} style={inp} className="px-3 py-2.5 rounded-lg text-[13px] font-semibold outline-none">{markets.map((market) => <option key={market.id} value={market.id}>{market.name}</option>)}</select>{canWrite && <div className="flex gap-2"><input type="date" value={newDate} onChange={(event) => setNewDate(event.target.value)} style={inp} className="flex-1 px-3 py-2.5 rounded-lg text-[13px] outline-none" /><button onClick={addDate} style={{ background: C.pine, color: "#fff" }} className="px-3 rounded-lg"><Plus size={16} /></button></div>}</div><div className="flex gap-2 flex-wrap mt-3">{dates.map((date) => <button key={date.id} onClick={() => setDateId(String(date.id))} style={{ background: String(date.id) === String(dateId) ? C.pine : C.paper2, color: String(date.id) === String(dateId) ? "#fff" : C.sub }} className="px-3 py-1.5 rounded-full text-[12px] font-semibold">{date.event_date}</button>)}{dates.length === 0 && <span style={{ color: C.faint }} className="text-[12px]">Create the first event date for this market.</span>}</div></section>{selected && <><div style={{ background: C.paper2 }} className="p-1 rounded-full inline-flex self-start">{[["payments", "Approvals & payments", CreditCard], ["map", "Booth map", MapPinned], ["questions", "Questions", Send], ["downloads", "Download", DollarSign]].map(([key, label, Icon]) => <button key={key} onClick={() => setView(key)} style={{ background: view === key ? C.card : "transparent", color: view === key ? C.ink : C.sub }} className="px-3 py-1.5 rounded-full text-[12px] font-semibold flex items-center gap-1"><Icon size={13} /> {label}</button>)}</div>{view === "payments" ? <Payments approvals={scopedApprovals} vendors={vendors} dateId={dateId} canWrite={canWrite} refresh={refreshApprovals} notify={notify} /> : view === "map" ? <MapEditor dateId={dateId} marketId={marketId} vendors={vendors} canWrite={canWrite} notify={notify} /> : view === "questions" ? <EventQuestions dateId={dateId} marketId={marketId} canWrite={canWrite} notify={notify} /> : <EventDownloads dateId={dateId} approvals={scopedApprovals} notify={notify} />}</>}</div>;
+  const [markets, setMarkets] = useState(null);
+  const [vendors, setVendors] = useState(null);
+  const [marketId, setMarketId] = useState("");
+  const [dates, setDates] = useState([]);
+  const [dateId, setDateId] = useState("");
+  const [approvals, setApprovals] = useState([]);
+  const [newDate, setNewDate] = useState("");
+  const [view, setView] = useState("payments");
+  const loadDates = async (id, preferred) => {
+    if (!id) return;
+    try {
+      const result = await api.getMarketDates(id);
+      setDates(result.market_dates);
+      setDateId(
+        String(
+          preferred ||
+            result.market_dates.find((date) => date.status !== "skipped")?.id ||
+            "",
+        ),
+      );
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  };
+  const refreshApprovals = async () => {
+    if (!dateId) return;
+    try {
+      setApprovals(
+        (await api.getApprovals({ market_date_id: dateId })).approvals,
+      );
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  };
+  useEffect(() => {
+    Promise.all([api.getMarkets(), api.getVendors(), api.getApprovals()])
+      .then(([marketResult, vendorResult, approvalResult]) => {
+        const active = marketResult.markets.filter(
+          (market) => !market.archived,
+        );
+        setMarkets(active);
+        setVendors(vendorResult.vendors);
+        setApprovals(approvalResult.approvals);
+        if (active[0]) setMarketId(String(active[0].id));
+      })
+      .catch((error) => notify(error.message, "err"));
+  }, []);
+  useEffect(() => {
+    if (marketId) loadDates(marketId);
+  }, [marketId]);
+  useEffect(() => {
+    refreshApprovals();
+  }, [dateId]);
+  const addDate = async () => {
+    if (!newDate) return notify("Choose an event date", "err");
+    try {
+      const result = await api.createMarketDate({
+        market_id: Number(marketId),
+        event_date: newDate,
+      });
+      setNewDate("");
+      await loadDates(marketId, result.market_date.id);
+      notify("Event date saved");
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  };
+  if (!markets || !vendors)
+    return (
+      <div style={{ color: C.sub }} className="py-8">
+        <Loader2 size={16} className="inline animate-spin mr-2" />
+        Loading events…
+      </div>
+    );
+  const selected = dates.find((date) => String(date.id) === String(dateId));
+  const scopedApprovals = selected ? approvals : [];
+  return (
+    <div className="flex flex-col gap-4">
+      <section
+        style={{ background: C.card, border: `1px solid ${C.line}` }}
+        className="rounded-2xl p-4"
+      >
+        <div className="grid sm:grid-cols-2 gap-2">
+          <select
+            value={marketId}
+            onChange={(event) => setMarketId(event.target.value)}
+            style={inp}
+            className="px-3 py-2.5 rounded-lg text-[13px] font-semibold outline-none"
+          >
+            {markets.map((market) => (
+              <option key={market.id} value={market.id}>
+                {market.name}
+              </option>
+            ))}
+          </select>
+          {canWrite && (
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={newDate}
+                onChange={(event) => setNewDate(event.target.value)}
+                style={inp}
+                className="flex-1 px-3 py-2.5 rounded-lg text-[13px] outline-none"
+              />
+              <button
+                onClick={addDate}
+                style={{ background: C.pine, color: "#fff" }}
+                className="px-3 rounded-lg"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2 flex-wrap mt-3">
+          {dates.map((date) => (
+            <button
+              key={date.id}
+              onClick={() => setDateId(String(date.id))}
+              style={{
+                background:
+                  String(date.id) === String(dateId) ? C.pine : C.paper2,
+                color: String(date.id) === String(dateId) ? "#fff" : C.sub,
+              }}
+              className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
+            >
+              {date.event_date}
+            </button>
+          ))}
+          {dates.length === 0 && (
+            <span style={{ color: C.faint }} className="text-[12px]">
+              Create the first event date for this market.
+            </span>
+          )}
+        </div>
+      </section>
+      {selected && (
+        <>
+          <div
+            style={{ background: C.paper2 }}
+            className="p-1 rounded-full inline-flex self-start"
+          >
+            {[
+              ["payments", "Approvals & payments", CreditCard],
+              ["map", "Booth map", MapPinned],
+              ["questions", "Questions", Send],
+              ["downloads", "Download", DollarSign],
+            ].map(([key, label, Icon]) => (
+              <button
+                key={key}
+                onClick={() => setView(key)}
+                style={{
+                  background: view === key ? C.card : "transparent",
+                  color: view === key ? C.ink : C.sub,
+                }}
+                className="px-3 py-1.5 rounded-full text-[12px] font-semibold flex items-center gap-1"
+              >
+                <Icon size={13} /> {label}
+              </button>
+            ))}
+          </div>
+          {view === "payments" ? (
+            <Payments
+              approvals={scopedApprovals}
+              vendors={vendors}
+              dateId={dateId}
+              canWrite={canWrite}
+              refresh={refreshApprovals}
+              notify={notify}
+            />
+          ) : view === "map" ? (
+            <MapEditor
+              dateId={dateId}
+              marketId={marketId}
+              vendors={vendors}
+              canWrite={canWrite}
+              notify={notify}
+            />
+          ) : view === "questions" ? (
+            <EventQuestions
+              dateId={dateId}
+              marketId={marketId}
+              canWrite={canWrite}
+              notify={notify}
+            />
+          ) : (
+            <EventDownloads
+              dateId={dateId}
+              approvals={scopedApprovals}
+              notify={notify}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
 }

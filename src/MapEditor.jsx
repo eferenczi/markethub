@@ -132,13 +132,13 @@ export default function MapEditor({
           let nextHeight = Number(height) + (top ? -dy : dy);
           if (left) nextX = Number(start.x) + dx;
           if (top) nextY = Number(start.y) + dy;
-          if (nextWidth < 4) {
-            if (left) nextX -= 4 - nextWidth;
-            nextWidth = 4;
+          if (nextWidth < 0.1) {
+            if (left) nextX -= 0.1 - nextWidth;
+            nextWidth = 0.1;
           }
-          if (nextHeight < 4) {
-            if (top) nextY -= 4 - nextHeight;
-            nextHeight = 4;
+          if (nextHeight < 0.1) {
+            if (top) nextY -= 0.1 - nextHeight;
+            nextHeight = 0.1;
           }
           if (nextX < 0) {
             nextWidth += nextX;
@@ -148,8 +148,8 @@ export default function MapEditor({
             nextHeight += nextY;
             nextY = 0;
           }
-          nextWidth = Math.max(4, Math.min(nextWidth, 100 - nextX));
-          nextHeight = Math.max(4, Math.min(nextHeight, 100 - nextY));
+          nextWidth = Math.max(0.1, Math.min(nextWidth, 100 - nextX));
+          nextHeight = Math.max(0.1, Math.min(nextHeight, 100 - nextY));
           return {
             ...spot,
             x: nextX,
@@ -171,7 +171,8 @@ export default function MapEditor({
     };
   }, []);
   const begin = (event, index, mode) => {
-    if (!canWrite || event.button !== 0) return;
+    if (!canWrite || (event.pointerType === "mouse" && event.button !== 0))
+      return;
     event.preventDefault();
     event.stopPropagation();
     const spot = spots[index];
@@ -538,7 +539,7 @@ export default function MapEditor({
               outline:
                 selectedIndex === index ? `2px solid ${C.berry}` : "none",
             }}
-            className="absolute shadow-lg min-w-[56px] select-none"
+            className="absolute shadow-lg select-none"
           >
             <SpotArtwork spot={spot} />
             <div className="absolute left-1 top-1 text-[10px] font-bold text-slate-900 bg-white/80 rounded px-1 flex items-center gap-0.5">
@@ -561,22 +562,22 @@ export default function MapEditor({
                 <span
                   onPointerDown={(event) => begin(event, index, "resize-nw")}
                   style={{ cursor: "nwse-resize" }}
-                  className="absolute -left-1 -top-1 w-3 h-3 bg-white border border-slate-400 rounded-full"
+                  className="absolute -left-2 -top-2 w-4 h-4 bg-white border-2 border-slate-500 rounded-full shadow"
                 />
                 <span
                   onPointerDown={(event) => begin(event, index, "resize-ne")}
                   style={{ cursor: "nesw-resize" }}
-                  className="absolute -right-1 -top-1 w-3 h-3 bg-white border border-slate-400 rounded-full"
+                  className="absolute -right-2 -top-2 w-4 h-4 bg-white border-2 border-slate-500 rounded-full shadow"
                 />
                 <span
                   onPointerDown={(event) => begin(event, index, "resize-sw")}
                   style={{ cursor: "nesw-resize" }}
-                  className="absolute -left-1 -bottom-1 w-3 h-3 bg-white border border-slate-400 rounded-full"
+                  className="absolute -left-2 -bottom-2 w-4 h-4 bg-white border-2 border-slate-500 rounded-full shadow"
                 />
                 <span
                   onPointerDown={(event) => begin(event, index, "resize-se")}
                   style={{ cursor: "nwse-resize" }}
-                  className="absolute -right-1 -bottom-1 w-3 h-3 bg-white border border-slate-400 rounded-full"
+                  className="absolute -right-2 -bottom-2 w-4 h-4 bg-white border-2 border-slate-500 rounded-full shadow"
                 />
               </>
             )}

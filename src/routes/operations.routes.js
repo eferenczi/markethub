@@ -17,6 +17,8 @@ const APPROVAL_STATUS = [
   "awaiting_payment",
   "held",
   "paid",
+  "waived",
+  "rejected",
   "released",
 ];
 const PROCESSING_RATES = {
@@ -66,6 +68,7 @@ async function approvalForOrg(orgId, approvalId) {
 
 function approvalSummary(row) {
   const fee = Number(row.fee_cents || 0);
+  if (row.status === "waived") return { ...row, amount_due_cents: 0 };
   const discount =
     row.discount_type === "amount"
       ? Math.min(fee, Number(row.discount_value || 0))
@@ -344,11 +347,9 @@ router.post(
     if (!(await db("vendor_markets").where(link).first())) {
       await db("vendor_markets").insert({ ...link, stage_override: "Applied" });
     }
-    res
-      .status(201)
-      .json({
-        approval: approvalSummary(await db("approvals").where({ id }).first()),
-      });
+    res.status(201).json({
+      approval: approvalSummary(await db("approvals").where({ id }).first()),
+    });
   }),
 );
 
@@ -391,13 +392,11 @@ router.post(
     const payment_deadline_at = new Date(
       Date.now() + 24 * 60 * 60 * 1000,
     ).toISOString();
-    await db("approvals")
-      .where({ id: approval.id })
-      .update({
-        status: "awaiting_payment",
-        payment_deadline_at,
-        updated_at: new Date().toISOString(),
-      });
+    await db("approvals").where({ id: approval.id }).update({
+      status: "awaiting_payment",
+      payment_deadline_at,
+      updated_at: new Date().toISOString(),
+    });
     res.json({
       approval: approvalSummary(
         await db("approvals").where({ id: approval.id }).first(),
@@ -448,21 +447,25 @@ router.post(
   ),
   asyncHandler(async (req, res) => {
     const approval = await approvalForOrg(req.user.org_id, req.params.id);
+    if (["waived", "rejected"].includes(approval.status)) {
+      throw new ApiError(
+        400,
+        "A waived or rejected approval cannot be recorded as paid",
+      );
+    }
     const amount_due_cents = approvalSummary(approval).amount_due_cents;
     const processing_fee_cents =
       req.body.processing_fee_cents === undefined
         ? processingFee(req.body.payment_method, amount_due_cents)
         : req.body.processing_fee_cents;
-    await db("approvals")
-      .where({ id: approval.id })
-      .update({
-        status: "paid",
-        payment_method: req.body.payment_method,
-        processing_fee_cents,
-        paid_at: new Date().toISOString(),
-        payment_deadline_at: null,
-        updated_at: new Date().toISOString(),
-      });
+    await db("approvals").where({ id: approval.id }).update({
+      status: "paid",
+      payment_method: req.body.payment_method,
+      processing_fee_cents,
+      paid_at: new Date().toISOString(),
+      payment_deadline_at: null,
+      updated_at: new Date().toISOString(),
+    });
     res.json({
       approval: approvalSummary(
         await db("approvals").where({ id: approval.id }).first(),

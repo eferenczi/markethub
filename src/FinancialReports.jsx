@@ -6,6 +6,24 @@ import { C, FD } from "./theme";
 const inp = { background: C.card, border: `1px solid ${C.line}`, color: C.ink };
 const money = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
 const csvValue = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+const statusLabel = (status) =>
+  ({
+    pending: "Pending",
+    awaiting_payment: "Unpaid",
+    held: "Unpaid · held",
+    paid: "Paid",
+    waived: "Waived",
+    rejected: "Rejected",
+    released: "Released",
+  })[status] || status.replaceAll("_", " ");
+const statusTone = (status) =>
+  status === "paid" || status === "waived"
+    ? { background: C.sageSoft, color: C.pine }
+    : status === "rejected"
+      ? { background: C.dangerSoft, color: C.danger }
+      : status === "held"
+        ? { background: C.berrySoft, color: C.berry }
+        : { background: C.honeySoft, color: C.honeyDeep };
 const isoDate = (date) => date.toISOString().slice(0, 10);
 const today = () => isoDate(new Date());
 const dateRange = (period, anchor) => {
@@ -158,6 +176,14 @@ export default function FinancialReports({ notify }) {
     notify("Financial CSV exported");
   };
   const totals = report?.totals;
+  const statusCounts =
+    report?.transactions.reduce(
+      (counts, item) => ({
+        ...counts,
+        [item.status]: (counts[item.status] || 0) + 1,
+      }),
+      {},
+    ) || {};
   const periodLabel = `${range.from_date || "All time"}${range.to_date ? ` – ${range.to_date}` : ""}`;
   return (
     <div className="flex flex-col gap-4">
@@ -286,6 +312,34 @@ export default function FinancialReports({ notify }) {
           </div>
           <section
             style={{ background: C.card, border: `1px solid ${C.line}` }}
+            className="rounded-2xl p-4"
+          >
+            <p style={{ fontFamily: FD }} className="text-[17px] font-semibold">
+              Transactions by status
+            </p>
+            <p style={{ color: C.sub }} className="text-[11.5px] mt-1">
+              Pending, unpaid, waived, and rejected records remain in the report
+              and CSV.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {Object.entries(statusCounts).map(([status, count]) => (
+                <span
+                  key={status}
+                  style={statusTone(status)}
+                  className="px-2.5 py-1.5 rounded-full text-[11px] font-bold"
+                >
+                  {statusLabel(status)} · {count}
+                </span>
+              ))}
+              {Object.keys(statusCounts).length === 0 && (
+                <span style={{ color: C.faint }} className="text-[12px]">
+                  No transactions in this period.
+                </span>
+              )}
+            </div>
+          </section>
+          <section
+            style={{ background: C.card, border: `1px solid ${C.line}` }}
             className="rounded-2xl overflow-hidden"
           >
             <div className="p-4 flex items-center gap-2">
@@ -357,15 +411,10 @@ export default function FinancialReports({ notify }) {
                           {item.payment_method || "Not recorded"}
                         </p>
                         <span
-                          style={{
-                            background:
-                              item.status === "paid" ? C.sageSoft : C.honeySoft,
-                            color:
-                              item.status === "paid" ? C.pine : C.honeyDeep,
-                          }}
+                          style={statusTone(item.status)}
                           className="capitalize px-1.5 py-0.5 rounded-full text-[10px] font-bold"
                         >
-                          {item.status.replaceAll("_", " ")}
+                          {statusLabel(item.status)}
                         </span>
                       </td>
                       <td

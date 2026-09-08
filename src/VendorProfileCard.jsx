@@ -1,13 +1,284 @@
 import React, { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, X } from "lucide-react";
+import { ExternalLink, FileText, ImageIcon, Loader2, X } from "lucide-react";
 import { api } from "./api";
 import { C, FD } from "./theme";
 
 const money = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
+const assetLabel = (asset) =>
+  ({
+    insurance: "Insurance",
+    booth_photo: "Booth photo",
+    product_photo: "Product photo",
+  })[asset.kind] || "Uploaded file";
+
 export default function VendorProfileCard({ vendorId, onClose, notify }) {
   const [data, setData] = useState(null);
-  useEffect(() => { api.getVendorProfile(vendorId).then(setData).catch((error) => notify(error.message, "err")); }, [vendorId]);
-  if (!data) return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4"><div style={{ background: C.card }} className="rounded-2xl px-6 py-5 text-[13px]"><Loader2 size={16} className="inline animate-spin mr-2" />Loading vendor profile…</div></div>;
+  useEffect(() => {
+    api
+      .getVendorProfile(vendorId)
+      .then(setData)
+      .catch((error) => notify(error.message, "err"));
+  }, [vendorId]);
+  const openAsset = async (applicationId, asset) => {
+    try {
+      const blob = await api.getApplicationAsset(applicationId, asset.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  };
+  if (!data)
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
+        <div
+          style={{ background: C.card }}
+          className="rounded-2xl px-6 py-5 text-[13px]"
+        >
+          <Loader2 size={16} className="inline animate-spin mr-2" />
+          Loading vendor profile…
+        </div>
+      </div>
+    );
   const { vendor, approvals, applications, markets } = data;
-  return <div className="fixed inset-0 z-50 bg-black/35 p-3 sm:p-7 overflow-y-auto"><section style={{ background: C.card, color: C.ink, maxWidth: 880, margin: "0 auto" }} className="rounded-2xl shadow-2xl p-5 sm:p-6"><div className="flex gap-3"><div className="flex-1"><p style={{ color: C.faint }} className="text-[10px] font-bold uppercase tracking-wide">Vendor CRM profile</p><h2 style={{ fontFamily: FD }} className="text-[25px] font-semibold mt-1">{vendor.business_name}</h2><p style={{ color: C.sub }} className="text-[12.5px] mt-1">{[vendor.contact_name, vendor.category, vendor.booth_type === "truck" ? "Food truck" : "10×10 tent"].filter(Boolean).join(" · ")}</p></div><button onClick={onClose} style={{ color: C.sub }} className="p-1 self-start"><X size={20} /></button></div><div style={{ background: C.paper2 }} className="grid sm:grid-cols-3 gap-3 rounded-xl p-3 mt-4 text-[12px]"><div><p style={{ color: C.faint }} className="text-[10px] font-bold uppercase">Contact</p><p className="font-semibold mt-1">{vendor.contact_name || "—"}</p><p style={{ color: C.sub }}>{vendor.email || "No email"}</p><p style={{ color: C.sub }}>{vendor.phone || "No phone"}</p></div><div><p style={{ color: C.faint }} className="text-[10px] font-bold uppercase">Setup</p><p className="font-semibold mt-1 capitalize">{vendor.booth_type || "tent"}</p><p style={{ color: C.sub }}>{vendor.category || "No category"}</p><p style={{ color: C.sub }}>Stage: {vendor.stage}</p></div><div><p style={{ color: C.faint }} className="text-[10px] font-bold uppercase">Social</p><p className="mt-1">{vendor.instagram || "—"}</p><p style={{ color: C.sub }}>{vendor.tiktok || ""}</p><p style={{ color: C.sub }}>{vendor.facebook || ""}</p></div></div><div className="grid lg:grid-cols-2 gap-4 mt-5"><section style={{ border: `1px solid ${C.line}` }} className="rounded-xl overflow-hidden"><div className="px-4 py-3"><p style={{ fontFamily: FD }} className="text-[18px] font-semibold">Markets & payments</p><p style={{ color: C.sub }} className="text-[11.5px]">Every event this vendor has been added to.</p></div><div className="max-h-64 overflow-y-auto">{approvals.map((item) => <div key={item.id} style={{ borderTop: `1px solid ${C.line}` }} className="px-4 py-3 text-[12px] flex gap-2"><div className="flex-1"><p className="font-semibold">{item.market_name}</p><p style={{ color: C.sub }}>{item.event_date} · {item.booth_type}</p></div><div className="text-right"><p className="font-bold">{money(item.amount_due_cents)}</p><p style={{ color: item.status === "paid" ? C.pine : C.honeyDeep }} className="capitalize">{item.status.replaceAll("_", " ")}{item.payment_method ? ` · ${item.payment_method}` : ""}</p></div></div>)}{approvals.length === 0 && <p style={{ color: C.faint }} className="px-4 py-6 text-[12px]">No event payment history yet.</p>}</div></section><section style={{ border: `1px solid ${C.line}` }} className="rounded-xl overflow-hidden"><div className="px-4 py-3"><p style={{ fontFamily: FD }} className="text-[18px] font-semibold">Applications</p><p style={{ color: C.sub }} className="text-[11.5px]">What this vendor applied for and its review status.</p></div><div className="max-h-64 overflow-y-auto">{applications.map((item) => <div key={item.id} style={{ borderTop: `1px solid ${C.line}` }} className="px-4 py-3 text-[12px] flex gap-2"><div className="flex-1"><p className="font-semibold">{item.market_name}</p><p style={{ color: C.sub }}>{item.category || vendor.category || "No category"} · {item.booth_type}</p></div><span style={{ background: item.status === "approved" ? C.sageSoft : C.paper2, color: item.status === "approved" ? C.pine : C.sub }} className="self-start px-2 py-1 rounded-full capitalize text-[10px] font-bold">{item.status.replaceAll("_", " ")}</span></div>)}{applications.length === 0 && <p style={{ color: C.faint }} className="px-4 py-6 text-[12px]">No formal applications yet.</p>}</div></section></div><section style={{ borderTop: `1px solid ${C.line}` }} className="mt-5 pt-4"><p style={{ fontFamily: FD }} className="text-[17px] font-semibold">Markets linked in CRM</p><div className="flex flex-wrap gap-2 mt-2">{markets.map((market) => <span key={market.id} style={{ background: C.paper2, color: C.sub }} className="px-2.5 py-1.5 rounded-full text-[11px] font-semibold">{market.market_name} · {market.stage_override || "Active"}</span>)}{markets.length === 0 && <p style={{ color: C.faint }} className="text-[12px]">No markets linked yet.</p>}</div></section></section></div>;
+  return (
+    <div className="fixed inset-0 z-50 bg-black/35 p-3 sm:p-7 overflow-y-auto">
+      <section
+        style={{
+          background: C.card,
+          color: C.ink,
+          maxWidth: 880,
+          margin: "0 auto",
+        }}
+        className="rounded-2xl shadow-2xl p-5 sm:p-6"
+      >
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <p
+              style={{ color: C.faint }}
+              className="text-[10px] font-bold uppercase tracking-wide"
+            >
+              Vendor CRM profile
+            </p>
+            <h2
+              style={{ fontFamily: FD }}
+              className="text-[25px] font-semibold mt-1"
+            >
+              {vendor.business_name}
+            </h2>
+            <p style={{ color: C.sub }} className="text-[12.5px] mt-1">
+              {[
+                vendor.contact_name,
+                vendor.category,
+                vendor.booth_type === "truck" ? "Food truck" : "10×10 tent",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ color: C.sub }}
+            className="p-1 self-start"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <div
+          style={{ background: C.paper2 }}
+          className="grid sm:grid-cols-3 gap-3 rounded-xl p-3 mt-4 text-[12px]"
+        >
+          <div>
+            <p
+              style={{ color: C.faint }}
+              className="text-[10px] font-bold uppercase"
+            >
+              Contact
+            </p>
+            <p className="font-semibold mt-1">{vendor.contact_name || "—"}</p>
+            <p style={{ color: C.sub }}>{vendor.email || "No email"}</p>
+            <p style={{ color: C.sub }}>{vendor.phone || "No phone"}</p>
+          </div>
+          <div>
+            <p
+              style={{ color: C.faint }}
+              className="text-[10px] font-bold uppercase"
+            >
+              Setup
+            </p>
+            <p className="font-semibold mt-1 capitalize">
+              {vendor.booth_type || "tent"}
+            </p>
+            <p style={{ color: C.sub }}>{vendor.category || "No category"}</p>
+            <p style={{ color: C.sub }}>Stage: {vendor.stage}</p>
+          </div>
+          <div>
+            <p
+              style={{ color: C.faint }}
+              className="text-[10px] font-bold uppercase"
+            >
+              Social
+            </p>
+            <p className="mt-1">{vendor.instagram || "—"}</p>
+            <p style={{ color: C.sub }}>{vendor.tiktok || ""}</p>
+            <p style={{ color: C.sub }}>{vendor.facebook || ""}</p>
+          </div>
+        </div>
+        <div className="grid lg:grid-cols-2 gap-4 mt-5">
+          <section
+            style={{ border: `1px solid ${C.line}` }}
+            className="rounded-xl overflow-hidden"
+          >
+            <div className="px-4 py-3">
+              <p
+                style={{ fontFamily: FD }}
+                className="text-[18px] font-semibold"
+              >
+                Markets & payments
+              </p>
+              <p style={{ color: C.sub }} className="text-[11.5px]">
+                Every event this vendor has been added to.
+              </p>
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {approvals.map((item) => (
+                <div
+                  key={item.id}
+                  style={{ borderTop: `1px solid ${C.line}` }}
+                  className="px-4 py-3 text-[12px] flex gap-2"
+                >
+                  <div className="flex-1">
+                    <p className="font-semibold">{item.market_name}</p>
+                    <p style={{ color: C.sub }}>
+                      {item.event_date} · {item.booth_type}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold">{money(item.amount_due_cents)}</p>
+                    <p
+                      style={{
+                        color: item.status === "paid" ? C.pine : C.honeyDeep,
+                      }}
+                      className="capitalize"
+                    >
+                      {item.status.replaceAll("_", " ")}
+                      {item.payment_method ? ` · ${item.payment_method}` : ""}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {approvals.length === 0 && (
+                <p style={{ color: C.faint }} className="px-4 py-6 text-[12px]">
+                  No event payment history yet.
+                </p>
+              )}
+            </div>
+          </section>
+          <section
+            style={{ border: `1px solid ${C.line}` }}
+            className="rounded-xl overflow-hidden"
+          >
+            <div className="px-4 py-3">
+              <p
+                style={{ fontFamily: FD }}
+                className="text-[18px] font-semibold"
+              >
+                Applications & uploads
+              </p>
+              <p style={{ color: C.sub }} className="text-[11.5px]">
+                Open the submitted application files, insurance documents, and
+                photos.
+              </p>
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {applications.map((item) => (
+                <div
+                  key={item.id}
+                  style={{ borderTop: `1px solid ${C.line}` }}
+                  className="px-4 py-3 text-[12px]"
+                >
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <p className="font-semibold">{item.market_name}</p>
+                      <p style={{ color: C.sub }}>
+                        {item.category || vendor.category || "No category"} ·{" "}
+                        {item.booth_type}
+                      </p>
+                    </div>
+                    <span
+                      style={{
+                        background:
+                          item.status === "approved" ? C.sageSoft : C.paper2,
+                        color: item.status === "approved" ? C.pine : C.sub,
+                      }}
+                      className="self-start px-2 py-1 rounded-full capitalize text-[10px] font-bold"
+                    >
+                      {item.status.replaceAll("_", " ")}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {item.assets.map((asset) => (
+                      <button
+                        key={asset.id}
+                        onClick={() => openAsset(item.id, asset)}
+                        style={{ background: C.paper2, color: C.pine }}
+                        className="px-2 py-1 rounded-md text-[10.5px] font-bold flex gap-1 items-center"
+                      >
+                        {asset.kind === "insurance" ? (
+                          <FileText size={12} />
+                        ) : (
+                          <ImageIcon size={12} />
+                        )}
+                        {assetLabel(asset)}: {asset.file_name}
+                        <ExternalLink size={11} />
+                      </button>
+                    ))}
+                    {item.assets.length === 0 && (
+                      <span style={{ color: C.faint }} className="text-[11px]">
+                        No files uploaded with this application.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {applications.length === 0 && (
+                <p style={{ color: C.faint }} className="px-4 py-6 text-[12px]">
+                  No formal applications yet.
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+        <section
+          style={{ borderTop: `1px solid ${C.line}` }}
+          className="mt-5 pt-4"
+        >
+          <p style={{ fontFamily: FD }} className="text-[17px] font-semibold">
+            Markets linked in CRM
+          </p>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {markets.map((market) => (
+              <span
+                key={market.id}
+                style={{ background: C.paper2, color: C.sub }}
+                className="px-2.5 py-1.5 rounded-full text-[11px] font-semibold"
+              >
+                {market.market_name} · {market.stage_override || "Active"}
+              </span>
+            ))}
+            {markets.length === 0 && (
+              <p style={{ color: C.faint }} className="text-[12px]">
+                No markets linked yet.
+              </p>
+            )}
+          </div>
+        </section>
+      </section>
+    </div>
+  );
 }
