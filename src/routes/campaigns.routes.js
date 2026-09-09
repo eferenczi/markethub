@@ -67,10 +67,35 @@ const subscriberSchema = z
     name: z.string().max(160).optional().default(""),
     email: z.string().email().optional().or(z.literal("")).default(""),
     phone: z.string().min(7).max(40).optional().or(z.literal("")).default(""),
+    interested_market_ids: z
+      .array(z.number().int().positive())
+      .max(100)
+      .optional()
+      .default([]),
   })
   .refine((value) => value.email || value.phone, {
     message: "An email address or phone number is required",
   });
+const customerForClient = (customer) => {
+  let interested_market_ids = [];
+  try {
+    interested_market_ids = Array.isArray(customer.interested_market_ids)
+      ? customer.interested_market_ids
+      : JSON.parse(customer.interested_market_ids || "[]");
+  } catch {
+    interested_market_ids = [];
+  }
+  return { ...customer, interested_market_ids };
+};
+async function validateCustomerMarkets(orgId, ids = []) {
+  if (!ids.length) return;
+  const markets = await db("markets")
+    .where({ org_id: orgId })
+    .whereIn("id", ids)
+    .select("id");
+  if (markets.length !== ids.length)
+    throw new ApiError(400, "One or more selected markets are unavailable");
+}
 const parseSteps = (campaign) => {
   try {
     return JSON.parse(campaign.steps || "[]");
@@ -255,7 +280,8 @@ router.get(
     res.json({
       subscribers: await db("newsletter_subscribers")
         .where({ org_id: req.user.org_id })
-        .orderBy("created_at", "desc"),
+        .orderBy("created_at", "desc")
+        .then((customers) => customers.map(customerForClient)),
     }),
   ),
 );
@@ -264,12 +290,21 @@ router.post(
   canWrite,
   validate(subscriberSchema),
   asyncHandler(async (req, res) => {
+    await validateCustomerMarkets(
+      req.user.org_id,
+      req.body.interested_market_ids,
+    );
     const id = await insertId(db, "newsletter_subscribers", {
       ...req.body,
+      interested_market_ids: JSON.stringify(
+        req.body.interested_market_ids || [],
+      ),
       org_id: req.user.org_id,
     });
     res.status(201).json({
-      subscriber: await db("newsletter_subscribers").where({ id }).first(),
+      subscriber: customerForClient(
+        await db("newsletter_subscribers").where({ id }).first(),
+      ),
     });
   }),
 );
@@ -293,6 +328,10 @@ router.patch(
         name: z.string().max(160).optional(),
         email: z.string().email().or(z.literal("")).optional(),
         phone: z.string().min(7).max(40).or(z.literal("")).optional(),
+        interested_market_ids: z
+          .array(z.number().int().positive())
+          .max(100)
+          .optional(),
       })
       .refine((value) => Object.keys(value).length > 0),
   ),
@@ -302,14 +341,21 @@ router.patch(
       .first();
     if (!existing) throw new ApiError(404, "Customer not found");
     const patch = { ...req.body };
+    if (patch.interested_market_ids !== undefined) {
+      await validateCustomerMarkets(
+        req.user.org_id,
+        patch.interested_market_ids,
+      );
+      patch.interested_market_ids = JSON.stringify(patch.interested_market_ids);
+    }
     if (patch.email === undefined) delete patch.email;
     if (patch.phone === undefined) delete patch.phone;
     if (patch.name === undefined) delete patch.name;
     await db("newsletter_subscribers").where({ id: existing.id }).update(patch);
     res.json({
-      subscriber: await db("newsletter_subscribers")
-        .where({ id: existing.id })
-        .first(),
+      subscriber: customerForClient(
+        await db("newsletter_subscribers").where({ id: existing.id }).first(),
+      ),
     });
   }),
 );

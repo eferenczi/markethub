@@ -1126,14 +1126,22 @@ function VendorsTab({ canWrite, notify }) {
 /* ---------------- Customers ---------------- */
 function CustomersTab({ canWrite, notify }) {
   const [rows, setRows] = useState(null);
+  const [markets, setMarkets] = useState([]);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    interested_market_ids: [],
+  });
   const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
   const load = () =>
-    api
-      .getSubscribers()
-      .then((result) => setRows(result.subscribers))
+    Promise.all([api.getSubscribers(), api.getMarkets()])
+      .then(([customerResult, marketResult]) => {
+        setRows(customerResult.subscribers);
+        setMarkets(marketResult.markets.filter((market) => !market.archived));
+      })
       .catch((error) => notify(error.message, "err"));
   useEffect(() => {
     load();
@@ -1144,7 +1152,7 @@ function CustomersTab({ canWrite, notify }) {
     setBusy(true);
     try {
       await api.createSubscriber(form);
-      setForm({ name: "", email: "", phone: "" });
+      setForm({ name: "", email: "", phone: "", interested_market_ids: [] });
       notify("Customer added to Central CRM");
       load();
     } catch (error) {
@@ -1159,6 +1167,7 @@ function CustomersTab({ canWrite, notify }) {
         name: customer.name || "",
         email: customer.email || "",
         phone: customer.phone || "",
+        interested_market_ids: customer.interested_market_ids || [],
       });
       setEditing(null);
       notify("Customer updated");
@@ -1238,6 +1247,39 @@ function CustomersTab({ canWrite, notify }) {
               className="px-3 py-2 rounded-lg text-[13px] outline-none"
             />
           </div>
+          <label className="block mt-3">
+            <span
+              style={{ color: C.faint }}
+              className="text-[10.5px] font-bold uppercase tracking-wide"
+            >
+              Interested markets
+            </span>
+            <select
+              multiple
+              value={form.interested_market_ids.map(String)}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  interested_market_ids: Array.from(
+                    event.target.selectedOptions,
+                    (option) => Number(option.value),
+                  ),
+                }))
+              }
+              style={inp}
+              className="mt-1 w-full min-h-24 px-3 py-2 rounded-lg text-[12px] outline-none"
+            >
+              {markets.map((market) => (
+                <option key={market.id} value={market.id}>
+                  {market.name}
+                </option>
+              ))}
+            </select>
+            <span style={{ color: C.sub }} className="block mt-1 text-[10.5px]">
+              Hold Command (Mac) or Ctrl (Windows) to choose more than one
+              market.
+            </span>
+          </label>
           <button
             onClick={add}
             disabled={busy}
@@ -1279,7 +1321,7 @@ function CustomersTab({ canWrite, notify }) {
               <Users size={16} color={C.pine} />
             </div>
             {editing === customer.id ? (
-              <div className="flex-1 grid sm:grid-cols-3 gap-1.5">
+              <div className="flex-1 grid sm:grid-cols-2 gap-1.5">
                 <input
                   defaultValue={customer.name || ""}
                   onChange={(event) => (customer.name = event.target.value)}
@@ -1287,6 +1329,26 @@ function CustomersTab({ canWrite, notify }) {
                   style={inp}
                   className="px-2 py-1.5 rounded text-[12px] outline-none"
                 />
+                <select
+                  multiple
+                  defaultValue={(customer.interested_market_ids || []).map(
+                    String,
+                  )}
+                  onChange={(event) =>
+                    (customer.interested_market_ids = Array.from(
+                      event.target.selectedOptions,
+                      (option) => Number(option.value),
+                    ))
+                  }
+                  style={inp}
+                  className="sm:col-span-2 min-h-20 px-2 py-1.5 rounded text-[11px] outline-none"
+                >
+                  {markets.map((market) => (
+                    <option key={market.id} value={market.id}>
+                      {market.name}
+                    </option>
+                  ))}
+                </select>
                 <input
                   defaultValue={customer.email || ""}
                   onChange={(event) => (customer.email = event.target.value)}
@@ -1312,6 +1374,23 @@ function CustomersTab({ canWrite, notify }) {
                     .filter(Boolean)
                     .join(" · ") || "No contact information"}
                 </p>
+                {(customer.interested_market_ids || []).length > 0 && (
+                  <p
+                    style={{ color: C.pine }}
+                    className="text-[10.5px] mt-1 truncate"
+                  >
+                    Interested in:{" "}
+                    {(customer.interested_market_ids || [])
+                      .map(
+                        (id) =>
+                          markets.find(
+                            (market) => Number(market.id) === Number(id),
+                          )?.name,
+                      )
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                )}
               </div>
             )}
             {canWrite &&
