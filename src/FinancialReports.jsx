@@ -199,7 +199,8 @@ export default function FinancialReports({ notify }) {
             Financial reporting
           </p>
           <p style={{ color: C.sub }} className="text-[12px]">
-            Payment performance, processing costs, and every vendor transaction.
+            Online payments deduct a 3.5% processor fee from collected fees.
+            Cash, Zelle, and Venmo remain in reporting with a $0 processor fee.
           </p>
         </div>
         <select
@@ -283,8 +284,8 @@ export default function FinancialReports({ notify }) {
               ["Collected", totals.collected_cents, C.pine],
               ["Outstanding", totals.outstanding_cents, C.honeyDeep],
               ["Discounts given", totals.discounts_cents, C.berry],
-              ["Processing fees", totals.processing_fees_cents, C.danger],
-              ["Net payout", totals.net_payout_cents, C.ink],
+              ["Processor fees (3.5%)", totals.processing_fees_cents, C.danger],
+              ["Net after processor fees", totals.net_payout_cents, C.ink],
             ].map(([label, value, tone]) => (
               <div
                 key={label}

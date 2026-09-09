@@ -463,7 +463,6 @@ router.post(
         "cash",
         "other",
       ]),
-      processing_fee_cents: z.number().int().nonnegative().optional(),
     }),
   ),
   asyncHandler(async (req, res) => {
@@ -475,10 +474,10 @@ router.post(
       );
     }
     const amount_due_cents = approvalSummary(approval).amount_due_cents;
-    const processing_fee_cents =
-      req.body.processing_fee_cents === undefined
-        ? processingFee(req.body.payment_method, amount_due_cents)
-        : req.body.processing_fee_cents;
+    const processing_fee_cents = processingFee(
+      req.body.payment_method,
+      amount_due_cents,
+    );
     await notifications.markApprovalPaid(
       approval.id,
       req.user.org_id,

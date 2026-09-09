@@ -284,6 +284,35 @@ router.delete(
     res.json({ ok: true });
   }),
 );
+router.patch(
+  "/subscribers/:id",
+  canWrite,
+  validate(
+    z
+      .object({
+        name: z.string().max(160).optional(),
+        email: z.string().email().or(z.literal("")).optional(),
+        phone: z.string().min(7).max(40).or(z.literal("")).optional(),
+      })
+      .refine((value) => Object.keys(value).length > 0),
+  ),
+  asyncHandler(async (req, res) => {
+    const existing = await db("newsletter_subscribers")
+      .where({ id: req.params.id, org_id: req.user.org_id })
+      .first();
+    if (!existing) throw new ApiError(404, "Customer not found");
+    const patch = { ...req.body };
+    if (patch.email === undefined) delete patch.email;
+    if (patch.phone === undefined) delete patch.phone;
+    if (patch.name === undefined) delete patch.name;
+    await db("newsletter_subscribers").where({ id: existing.id }).update(patch);
+    res.json({
+      subscriber: await db("newsletter_subscribers")
+        .where({ id: existing.id })
+        .first(),
+    });
+  }),
+);
 
 router.post(
   "/:id/launch",

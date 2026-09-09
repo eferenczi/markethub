@@ -261,6 +261,8 @@ export const api = {
   getCampaignPublicLinks: () => request("/campaigns/public-links"),
   createSubscriber: (body) =>
     request("/campaigns/subscribers", { method: "POST", body }),
+  updateSubscriber: (id, body) =>
+    request(`/campaigns/subscribers/${id}`, { method: "PATCH", body }),
   deleteSubscriber: (id) =>
     request(`/campaigns/subscribers/${id}`, { method: "DELETE" }),
   // billing

@@ -142,8 +142,9 @@ export default function PaymentPage({ paymentKey }) {
                 {money(payment.amount_due_cents)}
               </p>
               <p style={{ color: C.sub }} className="mt-2 text-xs">
-                Online card and wallet payments carry a 3.5% processing fee in
-                market reporting; cash, Zelle, and Venmo have no processing fee.
+                Your market fee is not increased. The organizer absorbs the 3.5%
+                processor deduction for online card and wallet payments; cash,
+                Zelle, and Venmo have no processing fee.
               </p>
               {payment.online_checkout_available && (
                 <button

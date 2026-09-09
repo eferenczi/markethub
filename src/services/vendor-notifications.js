@@ -15,6 +15,10 @@ const DEFAULTS = {
 };
 
 const money = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
+const processingFee = (paymentMethod, amountCents) =>
+  ["cash", "zelle", "venmo"].includes(paymentMethod)
+    ? 0
+    : Math.round(Number(amountCents || 0) * 0.035);
 const asDate = (value) =>
   new Date(`${String(value).slice(0, 10)}T13:00:00.000Z`);
 const escapeHtml = (value) =>
@@ -217,16 +221,20 @@ async function markApprovalPaid(
   approvalId,
   orgId,
   paymentMethod = "stripe",
-  processingFeeCents = 0,
+  processingFeeCents,
 ) {
   const approval = await db("approvals")
     .where({ id: approvalId, org_id: orgId })
     .first();
   if (!approval || approval.status === "paid") return approval;
+  const feeCents =
+    processingFeeCents === undefined
+      ? processingFee(paymentMethod, due(approval))
+      : processingFeeCents;
   await db("approvals").where({ id: approval.id }).update({
     status: "paid",
     payment_method: paymentMethod,
-    processing_fee_cents: processingFeeCents,
+    processing_fee_cents: feeCents,
     paid_at: new Date().toISOString(),
     payment_deadline_at: null,
     updated_at: new Date().toISOString(),
@@ -238,6 +246,7 @@ async function markApprovalPaid(
 module.exports = {
   DEFAULTS,
   due,
+  processingFee,
   detailsFor,
   queuePaymentRequest,
   queuePaidLoadIn,

@@ -1123,6 +1123,240 @@ function VendorsTab({ canWrite, notify }) {
   );
 }
 
+/* ---------------- Customers ---------------- */
+function CustomersTab({ canWrite, notify }) {
+  const [rows, setRows] = useState(null);
+  const [search, setSearch] = useState("");
+  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [editing, setEditing] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = () =>
+    api
+      .getSubscribers()
+      .then((result) => setRows(result.subscribers))
+      .catch((error) => notify(error.message, "err"));
+  useEffect(() => {
+    load();
+  }, []);
+  const add = async () => {
+    if (!form.email && !form.phone)
+      return notify("Enter an email address or phone number", "err");
+    setBusy(true);
+    try {
+      await api.createSubscriber(form);
+      setForm({ name: "", email: "", phone: "" });
+      notify("Customer added to Central CRM");
+      load();
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const save = async (customer) => {
+    try {
+      await api.updateSubscriber(customer.id, {
+        name: customer.name || "",
+        email: customer.email || "",
+        phone: customer.phone || "",
+      });
+      setEditing(null);
+      notify("Customer updated");
+      load();
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  };
+  const remove = async (customer) => {
+    try {
+      await api.deleteSubscriber(customer.id);
+      notify("Customer removed");
+      load();
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  };
+  if (!rows) return <Loading />;
+  const query = search.trim().toLowerCase();
+  const filtered = rows.filter((customer) =>
+    [customer.name, customer.email, customer.phone]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(query),
+  );
+  return (
+    <div>
+      {canWrite && (
+        <section
+          style={{ background: C.card, border: `1px solid ${C.line}` }}
+          className="rounded-2xl p-4 mb-4"
+        >
+          <p
+            style={{ color: C.faint }}
+            className="text-[10.5px] font-bold uppercase tracking-wide mb-2"
+          >
+            Add a customer
+          </p>
+          <p style={{ color: C.sub }} className="text-[11.5px] mb-3">
+            Customers also appear here automatically when they use the public
+            newsletter signup link.
+          </p>
+          <div className="grid sm:grid-cols-3 gap-2">
+            <input
+              value={form.name}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, name: event.target.value }))
+              }
+              placeholder="Name"
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[13px] outline-none"
+            />
+            <input
+              value={form.email}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  email: event.target.value,
+                }))
+              }
+              placeholder="Email"
+              type="email"
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[13px] outline-none"
+            />
+            <input
+              value={form.phone}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  phone: event.target.value,
+                }))
+              }
+              placeholder="Phone"
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[13px] outline-none"
+            />
+          </div>
+          <button
+            onClick={add}
+            disabled={busy}
+            style={{
+              background: C.pine,
+              color: "#fff",
+              opacity: busy ? 0.6 : 1,
+            }}
+            className="mt-3 px-4 py-2 rounded-lg text-[13px] font-bold flex items-center gap-1.5"
+          >
+            {busy ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Plus size={14} />
+            )}{" "}
+            Add customer
+          </button>
+        </section>
+      )}
+      <input
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="Search customers by name, email, or phone"
+        style={inp}
+        className="w-full mb-3 px-3 py-2.5 rounded-lg text-[13px] outline-none"
+      />
+      <div className="flex flex-col gap-2">
+        {!filtered.length && <Empty label="No customer contacts found." />}
+        {filtered.map((customer) => (
+          <article
+            key={customer.id}
+            style={{ background: C.card, border: `1px solid ${C.line}` }}
+            className="rounded-xl p-3 flex gap-3 items-center"
+          >
+            <div
+              style={{ background: C.sageSoft }}
+              className="w-9 h-9 rounded-lg flex items-center justify-center"
+            >
+              <Users size={16} color={C.pine} />
+            </div>
+            {editing === customer.id ? (
+              <div className="flex-1 grid sm:grid-cols-3 gap-1.5">
+                <input
+                  defaultValue={customer.name || ""}
+                  onChange={(event) => (customer.name = event.target.value)}
+                  placeholder="Name"
+                  style={inp}
+                  className="px-2 py-1.5 rounded text-[12px] outline-none"
+                />
+                <input
+                  defaultValue={customer.email || ""}
+                  onChange={(event) => (customer.email = event.target.value)}
+                  placeholder="Email"
+                  style={inp}
+                  className="px-2 py-1.5 rounded text-[12px] outline-none"
+                />
+                <input
+                  defaultValue={customer.phone || ""}
+                  onChange={(event) => (customer.phone = event.target.value)}
+                  placeholder="Phone"
+                  style={inp}
+                  className="px-2 py-1.5 rounded text-[12px] outline-none"
+                />
+              </div>
+            ) : (
+              <div className="flex-1 min-w-0">
+                <p className="text-[13.5px] font-semibold">
+                  {customer.name || "Newsletter customer"}
+                </p>
+                <p style={{ color: C.sub }} className="text-[11.5px] truncate">
+                  {[customer.email, customer.phone]
+                    .filter(Boolean)
+                    .join(" · ") || "No contact information"}
+                </p>
+              </div>
+            )}
+            {canWrite &&
+              (editing === customer.id ? (
+                <>
+                  <button
+                    onClick={() => save(customer)}
+                    style={{ color: C.pine }}
+                    className="p-1.5"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button
+                    onClick={() => setEditing(null)}
+                    style={{ color: C.sub }}
+                    className="p-1.5"
+                  >
+                    <X size={16} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setEditing(customer.id)}
+                    style={{ color: C.sub }}
+                    className="p-1.5"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={() => remove(customer)}
+                    style={{ color: C.danger }}
+                    className="p-1.5"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </>
+              ))}
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- Live event operations ---------------- */
 function OperationsTab({ canWrite, notify }) {
   const [markets, setMarkets] = useState(null);
@@ -1464,7 +1698,7 @@ function DashboardTab({ go, notify }) {
       value: data.vendors.length,
       icon: Users,
       tone: C.berry,
-      tab: "vendors",
+      tab: "crm",
     },
     {
       label: "Needs review",
@@ -1665,7 +1899,7 @@ export default function RecordsPage({ user, onClose }) {
             {[
               ["dashboard", "Dashboard", LayoutDashboard],
               ["markets", "Markets", Building2],
-              ["vendors", "Vendors", Users],
+              ["crm", "Central CRM", Users],
               ["applications", "Applications", ClipboardList],
               ["operations", "Event operations", CalendarDays],
               ["templates", "Templates", Layers3],
@@ -1677,8 +1911,13 @@ export default function RecordsPage({ user, onClose }) {
                 onClick={() => setTab(key)}
                 style={{
                   background:
-                    tab === key ? "rgba(255,255,255,.13)" : "transparent",
-                  color: tab === key ? "#fff" : "rgba(255,255,255,.65)",
+                    tab === key || (key === "crm" && tab.startsWith("crm-"))
+                      ? "rgba(255,255,255,.13)"
+                      : "transparent",
+                  color:
+                    tab === key || (key === "crm" && tab.startsWith("crm-"))
+                      ? "#fff"
+                      : "rgba(255,255,255,.65)",
                 }}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-semibold text-left"
               >
@@ -1713,7 +1952,9 @@ export default function RecordsPage({ user, onClose }) {
                     {
                       dashboard: "Dashboard",
                       markets: "Markets & pricing",
-                      vendors: "Vendor CRM",
+                      crm: "Central CRM",
+                      "crm-vendors": "Central CRM",
+                      "crm-customers": "Central CRM",
                       applications: "Vendor applications",
                       operations: "Event operations",
                       templates: "Templates",
@@ -1737,7 +1978,7 @@ export default function RecordsPage({ user, onClose }) {
               {[
                 ["dashboard", "Dashboard"],
                 ["markets", "Markets"],
-                ["vendors", "Vendors"],
+                ["crm", "Central CRM"],
                 ["applications", "Applications"],
                 ["operations", "Events"],
                 ["templates", "Templates"],
@@ -1748,8 +1989,14 @@ export default function RecordsPage({ user, onClose }) {
                   key={key}
                   onClick={() => setTab(key)}
                   style={{
-                    background: tab === key ? C.pine : C.paper2,
-                    color: tab === key ? "#fff" : C.sub,
+                    background:
+                      tab === key || (key === "crm" && tab.startsWith("crm-"))
+                        ? C.pine
+                        : C.paper2,
+                    color:
+                      tab === key || (key === "crm" && tab.startsWith("crm-"))
+                        ? "#fff"
+                        : C.sub,
                   }}
                   className="px-3 py-1.5 rounded-full text-[11.5px] font-semibold whitespace-nowrap"
                 >
@@ -1763,8 +2010,84 @@ export default function RecordsPage({ user, onClose }) {
               <DashboardTab go={setTab} notify={notify} />
             ) : tab === "markets" ? (
               <MarketsTab canWrite={canWrite} notify={notify} />
-            ) : tab === "vendors" ? (
-              <VendorsTab canWrite={canWrite} notify={notify} />
+            ) : tab === "crm" ? (
+              <section>
+                <div
+                  style={{ borderBottom: `1px solid ${C.line}` }}
+                  className="flex gap-4 mb-5"
+                >
+                  <button
+                    onClick={() => setTab("crm-vendors")}
+                    style={{
+                      color: C.pine,
+                      borderBottom: `2px solid ${C.pine}`,
+                    }}
+                    className="-mb-px px-1 py-2 text-[12.5px] font-bold"
+                  >
+                    Vendors
+                  </button>
+                  <button
+                    onClick={() => setTab("crm-customers")}
+                    style={{ color: C.sub }}
+                    className="px-1 py-2 text-[12.5px] font-bold"
+                  >
+                    Customers
+                  </button>
+                </div>
+                <VendorsTab canWrite={canWrite} notify={notify} />
+              </section>
+            ) : tab === "crm-vendors" ? (
+              <section>
+                <div
+                  style={{ borderBottom: `1px solid ${C.line}` }}
+                  className="flex gap-4 mb-5"
+                >
+                  <button
+                    onClick={() => setTab("crm-vendors")}
+                    style={{
+                      color: C.pine,
+                      borderBottom: `2px solid ${C.pine}`,
+                    }}
+                    className="-mb-px px-1 py-2 text-[12.5px] font-bold"
+                  >
+                    Vendors
+                  </button>
+                  <button
+                    onClick={() => setTab("crm-customers")}
+                    style={{ color: C.sub }}
+                    className="px-1 py-2 text-[12.5px] font-bold"
+                  >
+                    Customers
+                  </button>
+                </div>
+                <VendorsTab canWrite={canWrite} notify={notify} />
+              </section>
+            ) : tab === "crm-customers" ? (
+              <section>
+                <div
+                  style={{ borderBottom: `1px solid ${C.line}` }}
+                  className="flex gap-4 mb-5"
+                >
+                  <button
+                    onClick={() => setTab("crm-vendors")}
+                    style={{ color: C.sub }}
+                    className="px-1 py-2 text-[12.5px] font-bold"
+                  >
+                    Vendors
+                  </button>
+                  <button
+                    onClick={() => setTab("crm-customers")}
+                    style={{
+                      color: C.pine,
+                      borderBottom: `2px solid ${C.pine}`,
+                    }}
+                    className="-mb-px px-1 py-2 text-[12.5px] font-bold"
+                  >
+                    Customers
+                  </button>
+                </div>
+                <CustomersTab canWrite={canWrite} notify={notify} />
+              </section>
             ) : tab === "applications" ? (
               <ApplicationsTab
                 user={user}
