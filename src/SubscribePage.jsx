@@ -6,7 +6,12 @@ import { C, FD, FB } from "./theme";
 const inp = { background: C.card, border: `1px solid ${C.line}`, color: C.ink };
 export default function SubscribePage({ subscribeKey }) {
   const [info, setInfo] = useState(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    interested_market_ids: [],
+  });
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -136,6 +141,51 @@ export default function SubscribePage({ subscribeKey }) {
             style={inp}
             className="px-3 py-2.5 rounded-lg text-[14px] outline-none"
           />
+          {(info.markets || []).length > 0 && (
+            <fieldset>
+              <legend
+                style={{ color: C.faint }}
+                className="text-[10.5px] font-bold uppercase tracking-wide"
+              >
+                Markets you’re interested in
+              </legend>
+              <p style={{ color: C.sub }} className="mt-1 text-[11.5px]">
+                Choose any markets you’d like to hear about.
+              </p>
+              <div
+                style={{ background: C.paper2, border: `1px solid ${C.line}` }}
+                className="mt-2 grid gap-1.5 rounded-xl p-2"
+              >
+                {info.markets.map((market) => (
+                  <label
+                    key={market.id}
+                    style={{ background: C.card, color: C.sub }}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-[12px] font-semibold cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.interested_market_ids.includes(market.id)}
+                      onChange={() =>
+                        setForm((current) => ({
+                          ...current,
+                          interested_market_ids:
+                            current.interested_market_ids.includes(market.id)
+                              ? current.interested_market_ids.filter(
+                                  (id) => id !== market.id,
+                                )
+                              : [...current.interested_market_ids, market.id],
+                        }))
+                      }
+                    />
+                    <span>
+                      {market.name}
+                      {market.location ? ` — ${market.location}` : ""}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
           <button
             onClick={submit}
             disabled={busy}

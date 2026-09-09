@@ -16,6 +16,11 @@ const subscribeSchema = z
     name: z.string().max(160).optional().default(""),
     email: z.string().email().optional().or(z.literal("")).default(""),
     phone: z.string().min(7).max(40).optional().or(z.literal("")).default(""),
+    interested_market_ids: z
+      .array(z.number().int().positive())
+      .max(100)
+      .optional()
+      .default([]),
   })
   .refine((value) => value.email || value.phone, {
     message: "An email address or phone number is required",
@@ -110,7 +115,12 @@ router.get(
       .first();
     if (!organization)
       throw new ApiError(404, "This customer signup link is unavailable");
-    res.json({ organization: { name: organization.name } });
+    const markets = await db("markets")
+      .where({ org_id: organization.id, archived: false })
+      .select("id", "name", "location")
+      .orderBy("sort_order")
+      .orderBy("name");
+    res.json({ organization: { name: organization.name }, markets });
   }),
 );
 router.post(
@@ -122,8 +132,17 @@ router.post(
       .first();
     if (!organization)
       throw new ApiError(404, "This customer signup link is unavailable");
+    if (req.body.interested_market_ids.length) {
+      const markets = await db("markets")
+        .where({ org_id: organization.id, archived: false })
+        .whereIn("id", req.body.interested_market_ids)
+        .select("id");
+      if (markets.length !== req.body.interested_market_ids.length)
+        throw new ApiError(400, "One or more selected markets are unavailable");
+    }
     const id = await insertId(db, "newsletter_subscribers", {
       ...req.body,
+      interested_market_ids: JSON.stringify(req.body.interested_market_ids),
       org_id: organization.id,
       active: true,
     });
