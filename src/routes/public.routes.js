@@ -42,7 +42,7 @@ const paymentMethods = (market) => {
       ? market.payment_methods
       : JSON.parse(market.payment_methods || "[]");
   } catch {
-    return [];
+    return ["cash"];
   }
 };
 
@@ -146,7 +146,13 @@ router.get(
         event_date: approval.event_date,
         amount_due_cents: due(approval),
         status: approval.status,
-        payment_methods: paymentMethods(approval),
+        payment_methods: [...new Set([...paymentMethods(approval), "cash"])],
+        payment_method: approval.payment_method || "",
+        processing_fee_cents: ["cash", "zelle", "venmo"].includes(
+          approval.payment_method,
+        )
+          ? 0
+          : Math.round(Number(due(approval) || 0) * 0.035),
         online_checkout_available: ["awaiting_payment", "held"].includes(
           approval.status,
         ),
@@ -178,6 +184,39 @@ router.post(
       },
     });
     res.json({ checkout_url: session.url });
+  }),
+);
+router.post(
+  "/payment/:key/method",
+  validate(
+    z.object({
+      payment_method: z.enum(["paypal", "venmo", "zelle", "cash", "other"]),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const approval = await paymentForKey(req.params.key);
+    if (!approval) throw new ApiError(404, "This payment link is unavailable");
+    if (
+      !paymentMethods(approval).includes(req.body.payment_method) &&
+      req.body.payment_method !== "cash"
+    )
+      throw new ApiError(
+        400,
+        "This payment method is not enabled for this market",
+      );
+    if (!["awaiting_payment", "held"].includes(approval.status))
+      throw new ApiError(400, "This payment link is not currently active");
+    await db("approvals")
+      .where({ id: approval.id })
+      .update({
+        payment_method: req.body.payment_method,
+        notes: `${approval.notes || ""}${approval.notes ? "\n" : ""}Vendor selected ${req.body.payment_method} payment on ${new Date().toISOString()}`,
+        updated_at: new Date().toISOString(),
+      });
+    res.json({
+      ok: true,
+      message: `Your ${req.body.payment_method} payment selection was sent to the market team.`,
+    });
   }),
 );
 

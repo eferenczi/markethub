@@ -14,6 +14,7 @@ const TYPES = [
   "categories_spaces",
   "required_documents",
   "vendor_messages",
+  "vendor_application",
 ];
 const publicKey = () => crypto.randomBytes(18).toString("base64url");
 const clientTemplate = (row) => ({

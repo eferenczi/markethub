@@ -16,6 +16,11 @@ const inp = { background: C.card, border: `1px solid ${C.line}`, color: C.ink };
 const TYPES = [
   { key: "booths", label: "Booth Layouts", icon: MapPinned },
   { key: "onboarding", label: "Onboarding Forms", icon: ClipboardList },
+  {
+    key: "vendor_application",
+    label: "Vendor Application",
+    icon: ClipboardList,
+  },
   { key: "categories_spaces", label: "Categories & Spaces", icon: Layers3 },
   { key: "required_documents", label: "Required Documents", icon: FileCheck2 },
   { key: "vendor_messages", label: "Vendor Emails", icon: Mail },
@@ -34,6 +39,8 @@ const DEFAULT_MESSAGES = {
 const descriptions = {
   onboarding:
     "Create vendor acknowledgment questions with Yes / No and comment options.",
+  vendor_application:
+    "Create editable questions for the public vendor application with Yes / No and comment options.",
   categories_spaces: "Enter category or space options, one per line.",
   required_documents:
     "Enter requested document names, one per line. These are displayed to vendors but remain optional.",
@@ -271,7 +278,9 @@ export default function TemplatesPage({ canWrite, notify }) {
   const save = async () => {
     if (
       !name.trim() ||
-      (type === "onboarding" ? !questions.length : !items.trim())
+      (type === "onboarding" || type === "vendor_application"
+        ? !questions.length
+        : !items.trim())
     )
       return notify("Add a template name and at least one item", "err");
     setBusy(true);
@@ -280,7 +289,7 @@ export default function TemplatesPage({ canWrite, notify }) {
         type,
         name: name.trim(),
         config:
-          type === "onboarding"
+          type === "onboarding" || type === "vendor_application"
             ? { questions }
             : {
                 items: items
@@ -386,7 +395,7 @@ export default function TemplatesPage({ canWrite, notify }) {
                   style={inp}
                   className="px-3 py-2.5 rounded-lg text-[13px] outline-none"
                 />
-                {type === "onboarding" ? (
+                {type === "onboarding" || type === "vendor_application" ? (
                   <>
                     <div className="grid sm:grid-cols-[1fr_170px_auto] gap-2">
                       <input

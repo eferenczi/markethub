@@ -8,6 +8,7 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const { insertId } = require("../utils/insert-id");
 const notifications = require("../services/vendor-notifications");
+const { rateFor } = require("../services/market-rates");
 
 const router = express.Router();
 const APPLICATION_STATUSES = [
@@ -29,6 +30,7 @@ const assetSchema = z.object({
 });
 const publicApplicationSchema = z.object({
   market_id: z.number().int().positive(),
+  market_date_id: z.number().int().positive().optional(),
   business_name: z.string().min(2).max(160),
   contact_name: z.string().min(2).max(160),
   phone: z.string().min(7).max(40),
@@ -42,6 +44,7 @@ const publicApplicationSchema = z.object({
   facebook: z.string().max(300).optional().default(""),
   website: z.string().max(500).optional().default(""),
   description: z.string().max(6000).optional().default(""),
+  application_answers: z.record(z.string(), z.unknown()).optional().default({}),
   assets: z.array(assetSchema).max(7).default([]),
 });
 
@@ -79,13 +82,35 @@ router.get(
     const organization = await organizationForKey(req.params.key);
     const markets = await db("markets")
       .where({ org_id: organization.id, archived: false })
-      .select("id", "name", "location", "description", "vendor_details")
+      .select(
+        "id",
+        "name",
+        "location",
+        "description",
+        "vendor_details",
+        "map_url",
+        "venue_contact_name",
+        "venue_contact_phone",
+        "venue_contact_email",
+        "seasonal_rates",
+      )
+      .orderBy("sort_order")
       .orderBy("name");
+    const marketDates = await db("market_dates")
+      .where({ "market_dates.org_id": organization.id })
+      .whereNot("status", "skipped")
+      .where("event_date", ">=", new Date().toISOString().slice(0, 10))
+      .select("id", "market_id", "event_date")
+      .orderBy("event_date");
     const market_templates = await db("market_template_assignments as a")
       .join("organizer_templates as t", "t.id", "a.template_id")
       .where({ "a.org_id": organization.id })
       .whereNull("a.market_date_id")
-      .whereIn("t.type", ["categories_spaces", "required_documents"])
+      .whereIn("t.type", [
+        "categories_spaces",
+        "required_documents",
+        "vendor_application",
+      ])
       .select("a.market_id", "t.type", "t.config");
     res.json({
       organization: { name: organization.name },
@@ -96,12 +121,17 @@ router.get(
         } catch {
           vendor_details = {};
         }
-        return { ...market, vendor_details };
+        let seasonal_rates = [];
+        try {
+          seasonal_rates = JSON.parse(market.seasonal_rates || "[]");
+        } catch {}
+        return { ...market, vendor_details, seasonal_rates };
       }),
       market_templates: market_templates.map((item) => ({
         ...item,
         config: JSON.parse(item.config || "{}"),
       })),
+      market_dates: marketDates,
     });
   }),
 );
@@ -121,6 +151,19 @@ router.post(
       })
       .first();
     if (!market) throw new ApiError(400, "Choose an active market");
+    let selectedDate = null;
+    if (req.body.market_date_id) {
+      selectedDate = await db("market_dates")
+        .where({
+          id: req.body.market_date_id,
+          market_id: market.id,
+          org_id: organization.id,
+        })
+        .whereNot("status", "skipped")
+        .first();
+      if (!selectedDate)
+        throw new ApiError(400, "Choose an available date for this market");
+    }
 
     const application = await db.transaction(async (trx) => {
       const existingVendor = await trx("vendors")
@@ -169,6 +212,7 @@ router.post(
         org_id: organization.id,
         vendor_id: vendorId,
         market_id: market.id,
+        market_date_id: selectedDate?.id || null,
         business_name: req.body.business_name,
         contact_name: req.body.contact_name,
         phone: req.body.phone,
@@ -183,6 +227,7 @@ router.post(
         facebook: req.body.facebook,
         website: req.body.website,
         description: req.body.description,
+        application_answers: JSON.stringify(req.body.application_answers || {}),
       });
       if (req.body.assets.length) {
         await trx("application_assets").insert(
@@ -315,12 +360,23 @@ router.post(
             market_id: application.market_id,
           })
           .first()
-      : await db("market_dates")
-          .where({ org_id: req.user.org_id, market_id: application.market_id })
-          .whereNot("status", "skipped")
-          .where("event_date", ">=", new Date().toISOString().slice(0, 10))
-          .orderBy("event_date")
-          .first();
+      : application.market_date_id
+        ? await db("market_dates")
+            .where({
+              id: application.market_date_id,
+              org_id: req.user.org_id,
+              market_id: application.market_id,
+            })
+            .first()
+        : await db("market_dates")
+            .where({
+              org_id: req.user.org_id,
+              market_id: application.market_id,
+            })
+            .whereNot("status", "skipped")
+            .where("event_date", ">=", new Date().toISOString().slice(0, 10))
+            .orderBy("event_date")
+            .first();
     if (!eventDate)
       throw new ApiError(
         400,
@@ -333,11 +389,7 @@ router.post(
       .where({ vendor_id: application.vendor_id, market_date_id: eventDate.id })
       .first();
     const feeCents = Math.round(
-      Number(
-        application.booth_type === "truck"
-          ? market.truck_fee
-          : market.booth_fee,
-      ) * 100,
+      rateFor(market, application.booth_type, eventDate.event_date) * 100,
     );
     const paymentKey = existing?.payment_key || publicKey();
     const approvalId = existing

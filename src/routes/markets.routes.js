@@ -29,6 +29,13 @@ const vendorDetailsSchema = z.object({
   rules: z.string().max(6000).optional().default(""),
   contact: z.string().max(3000).optional().default(""),
 });
+const seasonalRateSchema = z.object({
+  label: z.string().max(120).optional().default(""),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  booth_fee: z.number().nonnegative(),
+  truck_fee: z.number().nonnegative(),
+});
 
 const marketSchema = z.object({
   name: z.string().min(1),
@@ -39,6 +46,16 @@ const marketSchema = z.object({
   truck_fee: z.number().nonnegative().optional().default(0),
   app_fee: z.number().nonnegative().optional().default(0),
   payment_methods: z.array(z.enum(PAYMENT_METHODS)).optional(),
+  venue_contact_name: z.string().max(160).optional().default(""),
+  venue_contact_phone: z.string().max(40).optional().default(""),
+  venue_contact_email: z
+    .string()
+    .email()
+    .optional()
+    .or(z.literal(""))
+    .default(""),
+  map_url: z.string().url().optional().or(z.literal("")).default(""),
+  seasonal_rates: z.array(seasonalRateSchema).max(24).optional().default([]),
   frequency: z.enum(["weekly", "biweekly", "monthly", "custom"]).optional(),
   start_date: z
     .string()
@@ -67,14 +84,31 @@ function marketForClient(market) {
   } catch {
     vendor_details = {};
   }
-  return { ...market, payment_methods, vendor_details };
+  let seasonal_rates = [];
+  try {
+    seasonal_rates = Array.isArray(market.seasonal_rates)
+      ? market.seasonal_rates
+      : JSON.parse(market.seasonal_rates || "[]");
+  } catch {
+    seasonal_rates = [];
+  }
+  return {
+    ...market,
+    payment_methods: [...new Set([...(payment_methods || []), "cash"])],
+    vendor_details,
+    seasonal_rates,
+  };
 }
 function marketValues(values) {
   const next = { ...values };
   if (Array.isArray(next.payment_methods))
-    next.payment_methods = JSON.stringify(next.payment_methods);
+    next.payment_methods = JSON.stringify([
+      ...new Set([...next.payment_methods, "cash"]),
+    ]);
   if (next.vendor_details && typeof next.vendor_details === "object")
     next.vendor_details = JSON.stringify(next.vendor_details);
+  if (Array.isArray(next.seasonal_rates))
+    next.seasonal_rates = JSON.stringify(next.seasonal_rates);
   return next;
 }
 
@@ -83,7 +117,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const markets = await db("markets")
       .where({ org_id: req.user.org_id })
-      .orderBy("created_at", "desc");
+      .orderBy("sort_order")
+      .orderBy("created_at");
     res.json({ markets: markets.map(marketForClient) });
   }),
 );
@@ -93,12 +128,38 @@ router.post(
   canWrite,
   validate(marketSchema),
   asyncHandler(async (req, res) => {
+    const last = await db("markets")
+      .where({ org_id: req.user.org_id })
+      .max("sort_order as maximum")
+      .first();
     const id = await insertId(db, "markets", {
       ...marketValues(req.body),
       org_id: req.user.org_id,
+      sort_order: Number(last?.maximum || 0) + 1,
     });
     const market = await db("markets").where({ id }).first();
     res.status(201).json({ market: marketForClient(market) });
+  }),
+);
+
+router.put(
+  "/order",
+  canWrite,
+  validate(z.object({ ids: z.array(z.number().int().positive()).min(1) })),
+  asyncHandler(async (req, res) => {
+    const markets = await db("markets")
+      .where({ org_id: req.user.org_id })
+      .whereIn("id", req.body.ids)
+      .select("id");
+    if (markets.length !== req.body.ids.length)
+      throw new ApiError(400, "All markets must belong to this organization");
+    await db.transaction(async (trx) => {
+      for (const [index, id] of req.body.ids.entries())
+        await trx("markets")
+          .where({ id })
+          .update({ sort_order: index + 1 });
+    });
+    res.json({ ok: true });
   }),
 );
 

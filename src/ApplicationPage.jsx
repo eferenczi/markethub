@@ -13,6 +13,7 @@ import { C, FD, FB } from "./theme";
 const inp = { background: C.card, border: `1px solid ${C.line}`, color: C.ink };
 const blank = {
   market_id: "",
+  market_date_id: "",
   business_name: "",
   contact_name: "",
   phone: "",
@@ -26,6 +27,7 @@ const blank = {
   facebook: "",
   website: "",
   description: "",
+  application_answers: {},
 };
 const MAX_INSURANCE = 5 * 1024 * 1024;
 const MAX_PHOTO = 2 * 1024 * 1024;
@@ -133,6 +135,12 @@ export default function ApplicationPage({ applicationKey }) {
   const requestedDocuments =
     selectedTemplates.find((item) => item.type === "required_documents")?.config
       ?.items || [];
+  const applicationQuestions =
+    selectedTemplates.find((item) => item.type === "vendor_application")?.config
+      ?.questions || [];
+  const availableDates = (info?.market_dates || []).filter(
+    (date) => String(date.market_id) === String(form.market_id),
+  );
   const addInsurance = async (files) => {
     if (files.length !== 1)
       throw new Error("Please choose one insurance document.");
@@ -161,6 +169,9 @@ export default function ApplicationPage({ applicationKey }) {
       await api.submitPublicApplication(applicationKey, {
         ...form,
         market_id: Number(form.market_id),
+        market_date_id: form.market_date_id
+          ? Number(form.market_date_id)
+          : undefined,
         assets,
       });
       setDone(true);
@@ -340,6 +351,7 @@ export default function ApplicationPage({ applicationKey }) {
                 value={form.market_id}
                 onChange={(e) => {
                   set("market_id", e.target.value);
+                  set("market_date_id", "");
                   setShowMarketDetails(false);
                 }}
                 style={inp}
@@ -350,6 +362,26 @@ export default function ApplicationPage({ applicationKey }) {
                   <option key={market.id} value={market.id}>
                     {market.name}
                     {market.location ? ` — ${market.location}` : ""}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={form.market_date_id}
+                onChange={(e) => set("market_date_id", e.target.value)}
+                disabled={!form.market_id || !availableDates.length}
+                style={inp}
+                className="px-3 py-2.5 rounded-lg text-[14px] outline-none"
+              >
+                <option value="">
+                  {availableDates.length
+                    ? "Choose event date (optional)"
+                    : "No future dates posted yet"}
+                </option>
+                {availableDates.map((date) => (
+                  <option key={date.id} value={date.id}>
+                    {new Date(
+                      `${String(date.event_date).slice(0, 10)}T12:00:00`,
+                    ).toLocaleDateString()}
                   </option>
                 ))}
               </select>
@@ -411,6 +443,38 @@ export default function ApplicationPage({ applicationKey }) {
                         {selectedMarket.description}
                       </p>
                     )}
+                    {selectedMarket.map_url && (
+                      <a
+                        href={selectedMarket.map_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: C.pine }}
+                        className="font-bold underline"
+                      >
+                        Open venue map and directions
+                      </a>
+                    )}
+                    {(selectedMarket.venue_contact_name ||
+                      selectedMarket.venue_contact_phone ||
+                      selectedMarket.venue_contact_email) && (
+                      <div>
+                        <p
+                          style={{ color: C.faint }}
+                          className="text-[10px] font-bold uppercase"
+                        >
+                          Venue contact
+                        </p>
+                        <p className="mt-1">
+                          {[
+                            selectedMarket.venue_contact_name,
+                            selectedMarket.venue_contact_phone,
+                            selectedMarket.venue_contact_email,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                    )}
                     {[
                       ["schedule", "Schedule & event hours"],
                       ["arrival_instructions", "Arrival & check-in"],
@@ -445,6 +509,74 @@ export default function ApplicationPage({ applicationKey }) {
               </div>
             )}
           </section>
+          {applicationQuestions.length > 0 && (
+            <section>
+              <h2
+                style={{ fontFamily: FD }}
+                className="text-[19px] font-semibold mb-3"
+              >
+                Application questions
+              </h2>
+              <div className="flex flex-col gap-3">
+                {applicationQuestions.map((question) => (
+                  <div
+                    key={question.id}
+                    style={{
+                      background: C.paper2,
+                      border: `1px solid ${C.line}`,
+                    }}
+                    className="rounded-xl p-3"
+                  >
+                    <p className="text-[13px] font-semibold">
+                      {question.label}
+                    </p>
+                    {question.type !== "comment" && (
+                      <select
+                        value={
+                          form.application_answers[question.id]?.choice || ""
+                        }
+                        onChange={(event) =>
+                          set("application_answers", {
+                            ...form.application_answers,
+                            [question.id]: {
+                              ...(form.application_answers[question.id] || {}),
+                              choice: event.target.value,
+                            },
+                          })
+                        }
+                        style={inp}
+                        className="mt-2 px-3 py-2 rounded-lg text-[12px] outline-none"
+                      >
+                        <option value="">Choose an answer</option>
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </select>
+                    )}
+                    {question.type !== "yes_no" && (
+                      <textarea
+                        value={
+                          form.application_answers[question.id]?.comment || ""
+                        }
+                        onChange={(event) =>
+                          set("application_answers", {
+                            ...form.application_answers,
+                            [question.id]: {
+                              ...(form.application_answers[question.id] || {}),
+                              comment: event.target.value,
+                            },
+                          })
+                        }
+                        rows={2}
+                        placeholder="Add a comment (optional)"
+                        style={inp}
+                        className="mt-2 w-full px-3 py-2 rounded-lg text-[12px] outline-none"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
           <section>
             <h2
               style={{ fontFamily: FD }}

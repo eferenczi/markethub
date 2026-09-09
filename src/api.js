@@ -101,6 +101,8 @@ export const api = {
   createMarket: (body) => request("/markets", { method: "POST", body }),
   updateMarket: (id, body) =>
     request(`/markets/${id}`, { method: "PATCH", body }),
+  reorderMarkets: (ids) =>
+    request("/markets/order", { method: "PUT", body: { ids } }),
   deleteMarket: (id) => request(`/markets/${id}`, { method: "DELETE" }),
   // vendors (persisted)
   getVendors: () => request("/vendors"),
@@ -216,6 +218,12 @@ export const api = {
   getPublicPayment: (key) => request(`/public/payment/${key}`, { auth: false }),
   createPublicCheckout: (key) =>
     request(`/public/payment/${key}/checkout`, { method: "POST", auth: false }),
+  choosePublicPaymentMethod: (key, payment_method) =>
+    request(`/public/payment/${key}/method`, {
+      method: "POST",
+      body: { payment_method },
+      auth: false,
+    }),
   getPublicSubscribe: (key) =>
     request(`/public/subscribe/${key}`, { auth: false }),
   submitPublicSubscribe: (key, body) =>

@@ -14,6 +14,10 @@ const router = express.Router();
 router.use(requireAuth, requireActiveSubscription);
 const canWrite = requireRole("owner", "manager", "staff");
 const channels = ["email", "sms", "whatsapp"];
+const imageData = z
+  .string()
+  .regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/)
+  .max(3_000_000);
 const stepSchema = z.object({
   channel: z.enum(channels),
   subject: z.string().max(300).optional().default(""),
@@ -29,13 +33,33 @@ const stepSchema = z.object({
         .default("#1f5a4c"),
       cta_label: z.string().max(80).optional().default(""),
       cta_url: z.string().url().optional().or(z.literal("")).default(""),
+      logo_data: imageData.optional().or(z.literal("")).default(""),
+      image_data: imageData.optional().or(z.literal("")).default(""),
     })
     .optional(),
 });
 const campaignSchema = z.object({
   name: z.string().min(2).max(160),
-  audience: z.enum(["vendors", "market_participants", "customers", "all"]),
+  audience: z.enum([
+    "vendors",
+    "market_participants",
+    "customers",
+    "all",
+    "category",
+    "specific_vendor",
+  ]),
   market_id: z.number().int().positive().nullable().optional(),
+  audience_config: z
+    .object({
+      category: z.string().max(120).optional().default(""),
+      vendor_ids: z
+        .array(z.number().int().positive())
+        .max(100)
+        .optional()
+        .default([]),
+    })
+    .optional()
+    .default({}),
   steps: z.array(stepSchema).min(1).max(8),
 });
 const subscriberSchema = z
@@ -57,6 +81,13 @@ const parseSteps = (campaign) => {
 const publicCampaign = (campaign) => ({
   ...campaign,
   steps: parseSteps(campaign),
+  audience_config: (() => {
+    try {
+      return JSON.parse(campaign.audience_config || "{}");
+    } catch {
+      return {};
+    }
+  })(),
 });
 const escapeHtml = (value) =>
   String(value || "")
@@ -76,10 +107,16 @@ const newsletterHtml = (step) => {
     step.design.cta_label && step.design.cta_url
       ? `<p style=\"margin:28px 0 0\"><a href=\"${escapeHtml(step.design.cta_url)}\" style=\"display:inline-block;background:${accent};color:#ffffff;padding:12px 18px;border-radius:7px;text-decoration:none;font-weight:700\">${escapeHtml(step.design.cta_label)}</a></p>`
       : "";
-  return `<div style=\"background:#f6f3ed;padding:28px 12px;font-family:Arial,sans-serif;color:#17372f\"><main style=\"max-width:620px;margin:auto;background:#ffffff;border-radius:14px;overflow:hidden\"><div style=\"height:10px;background:${accent}\"></div><div style=\"padding:34px\"><h1 style=\"font-size:25px;line-height:1.2;margin:0 0 16px\">${heading}</h1><div style=\"font-size:16px;line-height:1.6\">${body}</div>${cta}</div></main></div>`;
+  const logo = step.design.logo_data
+    ? `<img src=\"${step.design.logo_data}\" alt=\"Logo\" style=\"display:block;max-height:56px;max-width:220px;margin:0 0 22px\">`
+    : "";
+  const image = step.design.image_data
+    ? `<img src=\"${step.design.image_data}\" alt=\"Newsletter image\" style=\"display:block;width:100%;max-height:300px;object-fit:cover;margin:22px 0;border-radius:8px\">`
+    : "";
+  return `<div style=\"background:#f6f3ed;padding:28px 12px;font-family:Arial,sans-serif;color:#17372f\"><main style=\"max-width:620px;margin:auto;background:#ffffff;border-radius:14px;overflow:hidden\"><div style=\"height:10px;background:${accent}\"></div><div style=\"padding:34px\">${logo}<h1 style=\"font-size:25px;line-height:1.2;margin:0 0 16px\">${heading}</h1><div style=\"font-size:16px;line-height:1.6\">${body}</div>${image}${cta}</div></main></div>`;
 };
 
-async function recipients(orgId, audience, marketId) {
+async function recipients(orgId, audience, marketId, audienceConfig = {}) {
   const rows = [];
   if (audience === "market_participants") {
     if (!marketId)
@@ -90,6 +127,23 @@ async function recipients(orgId, audience, marketId) {
         .where({ "a.org_id": orgId, "a.market_id": marketId })
         .whereNot("a.status", "rejected")
         .select("v.business_name as name", "v.email", "v.phone")),
+    );
+  } else if (audience === "category") {
+    if (!audienceConfig.category)
+      throw new ApiError(400, "Choose a vendor category");
+    rows.push(
+      ...(await db("vendors")
+        .where({ org_id: orgId, category: audienceConfig.category })
+        .select("business_name as name", "email", "phone")),
+    );
+  } else if (audience === "specific_vendor") {
+    if (!audienceConfig.vendor_ids?.length)
+      throw new ApiError(400, "Choose at least one vendor contact");
+    rows.push(
+      ...(await db("vendors")
+        .where({ org_id: orgId })
+        .whereIn("id", audienceConfig.vendor_ids)
+        .select("business_name as name", "email", "phone")),
     );
   } else if (audience === "vendors" || audience === "all") {
     const vendors = marketId
@@ -188,6 +242,7 @@ router.post(
       market_id: req.body.market_id || null,
       status: "draft",
       steps: JSON.stringify(req.body.steps),
+      audience_config: JSON.stringify(req.body.audience_config || {}),
     });
     const campaign = await db("campaigns").where({ id }).first();
     res.status(201).json({ campaign: publicCampaign(campaign) });
@@ -247,6 +302,13 @@ router.post(
       req.user.org_id,
       campaign.audience,
       marketId,
+      (() => {
+        try {
+          return JSON.parse(campaign.audience_config || "{}");
+        } catch {
+          return {};
+        }
+      })(),
     );
     const now = Date.now();
     const messages = [];

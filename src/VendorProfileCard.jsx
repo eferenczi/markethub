@@ -8,6 +8,7 @@ import {
   MessageCircle,
   MessageSquare,
   Phone,
+  Pencil,
   Save,
   X,
 } from "lucide-react";
@@ -105,6 +106,9 @@ export default function VendorProfileCard({
   const [data, setData] = useState(null);
   const [tagText, setTagText] = useState("");
   const [savingTags, setSavingTags] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({});
+  const [savingProfile, setSavingProfile] = useState(false);
   useEffect(() => {
     api
       .getVendorProfile(vendorId)
@@ -112,7 +116,10 @@ export default function VendorProfileCard({
       .catch((error) => notify(error.message, "err"));
   }, [vendorId]);
   useEffect(() => {
-    if (data) setTagText((data.vendor.tags || []).join(", "));
+    if (data) {
+      setTagText((data.vendor.tags || []).join(", "));
+      setDraft({ ...data.vendor });
+    }
   }, [data]);
   const openAsset = async (applicationId, asset) => {
     try {
@@ -162,6 +169,31 @@ export default function VendorProfileCard({
       setSavingTags(false);
     }
   };
+  const saveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      const result = await api.updateVendor(vendor.id, {
+        business_name: draft.business_name || "",
+        contact_name: draft.contact_name || "",
+        phone: draft.phone || "",
+        email: draft.email || "",
+        city: draft.city || "",
+        category: draft.category || "",
+        booth_type: draft.booth_type || "tent",
+        instagram: draft.instagram || "",
+        tiktok: draft.tiktok || "",
+        facebook: draft.facebook || "",
+        notes: draft.notes || "",
+      });
+      setData((current) => ({ ...current, vendor: result.vendor }));
+      setEditing(false);
+      notify("Vendor profile and manager notes saved");
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
   return (
     <div className="fixed inset-0 z-50 bg-black/35 p-3 sm:p-7 overflow-y-auto">
       <section
@@ -205,6 +237,115 @@ export default function VendorProfileCard({
             <X size={20} />
           </button>
         </div>
+        {canWrite && (
+          <div className="flex justify-end mt-2">
+            <button
+              onClick={() => setEditing((value) => !value)}
+              style={{ color: C.pine, background: C.paper2 }}
+              className="px-3 py-2 rounded-lg text-[11.5px] font-bold flex items-center gap-1"
+            >
+              <Pencil size={13} /> {editing ? "Close editor" : "Edit vendor"}
+            </button>
+          </div>
+        )}
+        {editing && canWrite && (
+          <section
+            style={{ background: C.paper2, border: `1px solid ${C.line}` }}
+            className="rounded-xl p-3 mt-3"
+          >
+            <p
+              style={{ color: C.faint }}
+              className="text-[10px] font-bold uppercase"
+            >
+              Edit CRM contact
+            </p>
+            <div className="grid sm:grid-cols-2 gap-2 mt-2">
+              {[
+                ["business_name", "Business name", "text"],
+                ["contact_name", "Contact name", "text"],
+                ["email", "Email", "email"],
+                ["phone", "Phone", "tel"],
+                ["city", "City", "text"],
+                ["category", "Vendor category", "text"],
+                ["instagram", "Instagram handle", "text"],
+                ["tiktok", "TikTok handle", "text"],
+                ["facebook", "Facebook page", "text"],
+              ].map(([key, placeholder, type]) => (
+                <input
+                  key={key}
+                  value={draft[key] || ""}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      [key]: event.target.value,
+                    }))
+                  }
+                  placeholder={placeholder}
+                  type={type}
+                  style={{
+                    background: C.card,
+                    border: `1px solid ${C.line}`,
+                    color: C.ink,
+                  }}
+                  className="px-2.5 py-2 rounded-lg text-[12px] outline-none"
+                />
+              ))}
+              <select
+                value={draft.booth_type || "tent"}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    booth_type: event.target.value,
+                  }))
+                }
+                style={{
+                  background: C.card,
+                  border: `1px solid ${C.line}`,
+                  color: C.ink,
+                }}
+                className="px-2.5 py-2 rounded-lg text-[12px] outline-none"
+              >
+                <option value="tent">10×10 canopy tent</option>
+                <option value="truck">Food truck</option>
+              </select>
+            </div>
+            <label
+              style={{ color: C.sub }}
+              className="block mt-3 text-[10px] font-bold uppercase"
+            >
+              Manager-only notes
+            </label>
+            <textarea
+              value={draft.notes || ""}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  notes: event.target.value,
+                }))
+              }
+              rows={4}
+              placeholder="Private notes for managers and staff. Vendors cannot see these notes."
+              style={{
+                background: C.card,
+                border: `1px solid ${C.line}`,
+                color: C.ink,
+              }}
+              className="mt-1 w-full px-2.5 py-2 rounded-lg text-[12px] outline-none resize-y"
+            />
+            <button
+              onClick={saveProfile}
+              disabled={savingProfile}
+              style={{
+                background: C.pine,
+                color: "#fff",
+                opacity: savingProfile ? 0.6 : 1,
+              }}
+              className="mt-2 px-3 py-2 rounded-lg text-[11px] font-bold flex items-center gap-1"
+            >
+              <Save size={12} /> {savingProfile ? "Saving…" : "Save contact"}
+            </button>
+          </section>
+        )}
         <div
           style={{ background: C.paper2 }}
           className="grid sm:grid-cols-3 gap-3 rounded-xl p-3 mt-4 text-[12px]"
@@ -352,6 +493,25 @@ export default function VendorProfileCard({
           </div>
         </section>
         <ContactActions vendor={vendor} />
+        {canWrite && vendor.notes && !editing && (
+          <section
+            style={{ background: C.honeySoft, border: `1px solid ${C.line}` }}
+            className="rounded-xl p-3 mt-4"
+          >
+            <p
+              style={{ color: C.faint }}
+              className="text-[10px] font-bold uppercase"
+            >
+              Manager-only notes
+            </p>
+            <p
+              style={{ color: C.sub, whiteSpace: "pre-wrap" }}
+              className="mt-1 text-[12px]"
+            >
+              {vendor.notes}
+            </p>
+          </section>
+        )}
         <div className="grid lg:grid-cols-2 gap-4 mt-5">
           <section
             style={{ border: `1px solid ${C.line}` }}

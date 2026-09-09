@@ -19,6 +19,7 @@ export default function PaymentPage({ paymentKey }) {
   const [payment, setPayment] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [chosen, setChosen] = useState("");
   const load = async () => {
     try {
       const result = await api.getPublicPayment(paymentKey);
@@ -37,6 +38,18 @@ export default function PaymentPage({ paymentKey }) {
       window.location.assign(result.checkout_url);
     } catch (err) {
       setError(err.message);
+      setBusy(false);
+    }
+  };
+  const chooseMethod = async (method) => {
+    setBusy(true);
+    try {
+      const result = await api.choosePublicPaymentMethod(paymentKey, method);
+      setChosen(result.message);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
       setBusy(false);
     }
   };
@@ -128,6 +141,10 @@ export default function PaymentPage({ paymentKey }) {
               >
                 {money(payment.amount_due_cents)}
               </p>
+              <p style={{ color: C.sub }} className="mt-2 text-xs">
+                Online card and wallet payments carry a 3.5% processing fee in
+                market reporting; cash, Zelle, and Venmo have no processing fee.
+              </p>
               {payment.online_checkout_available && (
                 <button
                   onClick={checkout}
@@ -147,7 +164,8 @@ export default function PaymentPage({ paymentKey }) {
                 Secure checkout accepts cards and, when supported on the device,
                 Apple Pay or Google Pay.
               </p>
-              {manual.length > 0 && (
+              {(manual.length > 0 ||
+                payment.payment_methods?.includes("cash")) && (
                 <div
                   style={{
                     background: C.paper2,
@@ -157,12 +175,34 @@ export default function PaymentPage({ paymentKey }) {
                 >
                   <p className="text-sm font-bold">Other accepted methods</p>
                   <p style={{ color: C.sub }} className="mt-1 text-xs">
-                    {manual
-                      .map((method) => labels[method] || method)
-                      .join(" · ")}
-                    . Contact your market manager to arrange one of these
-                    methods.
+                    Choose a method to let the market team know. They will
+                    confirm manual payments after receipt.
                   </p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {[...new Set([...manual, "cash"])].map((method) => (
+                      <button
+                        key={method}
+                        onClick={() => chooseMethod(method)}
+                        disabled={busy}
+                        style={{
+                          background: C.card,
+                          border: `1px solid ${C.line}`,
+                          color: C.pine,
+                        }}
+                        className="px-3 py-2 rounded-lg text-[11px] font-bold"
+                      >
+                        {labels[method] || method}
+                      </button>
+                    ))}
+                  </div>
+                  {chosen && (
+                    <p
+                      style={{ color: C.pine }}
+                      className="mt-3 text-xs font-semibold"
+                    >
+                      {chosen}
+                    </p>
+                  )}
                 </div>
               )}
             </>

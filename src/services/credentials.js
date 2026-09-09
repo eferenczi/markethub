@@ -1,29 +1,50 @@
 const db = require("../db");
 const { encrypt, decrypt } = require("../utils/crypto");
 
-const PROVIDERS = ["stripe", "sendgrid", "twilio"];
+const PROVIDERS = ["stripe", "paypal", "sendgrid", "twilio"];
 
 // Which fields each provider stores, and which are "secret" (never returned to the client).
 const PROVIDER_FIELDS = {
-  stripe: { fields: ["publishable_key", "secret_key", "webhook_secret"], secret: ["secret_key", "webhook_secret"] },
+  stripe: {
+    fields: ["publishable_key", "secret_key", "webhook_secret"],
+    secret: ["secret_key", "webhook_secret"],
+  },
+  paypal: {
+    fields: ["client_id", "client_secret", "merchant_email"],
+    secret: ["client_secret"],
+  },
   sendgrid: { fields: ["api_key", "from_email"], secret: ["api_key"] },
-  twilio: { fields: ["account_sid", "auth_token", "from_number", "whatsapp_from"], secret: ["auth_token"] },
+  twilio: {
+    fields: ["account_sid", "auth_token", "from_number", "whatsapp_from"],
+    secret: ["auth_token"],
+  },
 };
 
 // Save (upsert) a provider's credentials for an org, encrypted at rest.
 async function saveCredentials(orgId, provider, data) {
   const enc = encrypt(data);
-  const existing = await db("org_credentials").where({ org_id: orgId, provider }).first();
+  const existing = await db("org_credentials")
+    .where({ org_id: orgId, provider })
+    .first();
   if (existing) {
-    await db("org_credentials").where({ id: existing.id }).update({ data: enc, updated_at: new Date().toISOString() });
+    await db("org_credentials")
+      .where({ id: existing.id })
+      .update({ data: enc, updated_at: new Date().toISOString() });
   } else {
-    await db("org_credentials").insert({ org_id: orgId, provider, data: enc, updated_at: new Date().toISOString() });
+    await db("org_credentials").insert({
+      org_id: orgId,
+      provider,
+      data: enc,
+      updated_at: new Date().toISOString(),
+    });
   }
 }
 
 // Return decrypted credentials for internal use (integrations), or null.
 async function getCredentials(orgId, provider) {
-  const row = await db("org_credentials").where({ org_id: orgId, provider }).first();
+  const row = await db("org_credentials")
+    .where({ org_id: orgId, provider })
+    .first();
   if (!row) return null;
   try {
     return decrypt(row.data);
@@ -73,4 +94,11 @@ function maskSecret(s) {
   return "••••••••" + s.slice(-4);
 }
 
-module.exports = { PROVIDERS, PROVIDER_FIELDS, saveCredentials, getCredentials, listMasked, deleteCredentials };
+module.exports = {
+  PROVIDERS,
+  PROVIDER_FIELDS,
+  saveCredentials,
+  getCredentials,
+  listMasked,
+  deleteCredentials,
+};

@@ -18,6 +18,8 @@ import {
   Send,
   ReceiptText,
   Layers3,
+  GripVertical,
+  ExternalLink,
 } from "lucide-react";
 import { api } from "./api";
 import { C, FD, FB } from "./theme";
@@ -48,6 +50,15 @@ const splitTags = (value) => [
 
 function MarketDetailsCard({ market, canWrite, onClose, onSave, notify }) {
   const [description, setDescription] = useState(market.description || "");
+  const [mapUrl, setMapUrl] = useState(market.map_url || "");
+  const [venueContact, setVenueContact] = useState({
+    name: market.venue_contact_name || "",
+    phone: market.venue_contact_phone || "",
+    email: market.venue_contact_email || "",
+  });
+  const [seasonalRates, setSeasonalRates] = useState(
+    market.seasonal_rates || [],
+  );
   const [details, setDetails] = useState({
     ...emptyVendorDetails,
     ...(market.vendor_details || {}),
@@ -61,6 +72,15 @@ function MarketDetailsCard({ market, canWrite, onClose, onSave, notify }) {
       await api.updateMarket(market.id, {
         description,
         vendor_details: details,
+        map_url: mapUrl,
+        venue_contact_name: venueContact.name,
+        venue_contact_phone: venueContact.phone,
+        venue_contact_email: venueContact.email,
+        seasonal_rates: seasonalRates.map((rate) => ({
+          ...rate,
+          booth_fee: Number(rate.booth_fee || 0),
+          truck_fee: Number(rate.truck_fee || 0),
+        })),
       });
       await onSave();
       notify("Vendor-facing market details saved");
@@ -155,6 +175,165 @@ function MarketDetailsCard({ market, canWrite, onClose, onSave, notify }) {
               className="mt-1 w-full px-3 py-2.5 rounded-lg text-[13px] outline-none resize-y"
             />
           </div>
+          <div className="grid sm:grid-cols-3 gap-2">
+            <input
+              value={venueContact.name}
+              readOnly={!canWrite}
+              onChange={(event) =>
+                setVenueContact((current) => ({
+                  ...current,
+                  name: event.target.value,
+                }))
+              }
+              placeholder="Venue contact name"
+              style={inp}
+              className="px-3 py-2.5 rounded-lg text-[13px] outline-none"
+            />
+            <input
+              value={venueContact.phone}
+              readOnly={!canWrite}
+              onChange={(event) =>
+                setVenueContact((current) => ({
+                  ...current,
+                  phone: event.target.value,
+                }))
+              }
+              placeholder="Venue contact phone"
+              style={inp}
+              className="px-3 py-2.5 rounded-lg text-[13px] outline-none"
+            />
+            <input
+              value={venueContact.email}
+              readOnly={!canWrite}
+              onChange={(event) =>
+                setVenueContact((current) => ({
+                  ...current,
+                  email: event.target.value,
+                }))
+              }
+              placeholder="Venue contact email"
+              type="email"
+              style={inp}
+              className="px-3 py-2.5 rounded-lg text-[13px] outline-none"
+            />
+          </div>
+          <div>
+            <label
+              style={{ color: C.sub }}
+              className="text-[11px] font-bold uppercase"
+            >
+              Clickable venue map link
+            </label>
+            <div className="flex gap-2 mt-1">
+              <input
+                value={mapUrl}
+                readOnly={!canWrite}
+                onChange={(event) => setMapUrl(event.target.value)}
+                placeholder="https://maps.google.com/..."
+                type="url"
+                style={inp}
+                className="flex-1 px-3 py-2.5 rounded-lg text-[13px] outline-none"
+              />
+              {mapUrl && (
+                <a
+                  href={mapUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ background: C.paper2, color: C.pine }}
+                  className="px-3 py-2.5 rounded-lg text-[12px] font-bold flex items-center gap-1"
+                >
+                  <ExternalLink size={14} /> Open
+                </a>
+              )}
+            </div>
+          </div>
+          <section
+            style={{ background: C.paper2, border: `1px solid ${C.line}` }}
+            className="rounded-xl p-3"
+          >
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <p className="text-[12px] font-bold">Seasonal rates</p>
+                <p style={{ color: C.sub }} className="text-[11px]">
+                  These override the normal booth and truck prices for matching
+                  event dates.
+                </p>
+              </div>
+              {canWrite && (
+                <button
+                  onClick={() =>
+                    setSeasonalRates((rates) => [
+                      ...rates,
+                      {
+                        label: "",
+                        start_date: "",
+                        end_date: "",
+                        booth_fee: "",
+                        truck_fee: "",
+                      },
+                    ])
+                  }
+                  style={{ color: C.pine }}
+                  className="text-[11px] font-bold"
+                >
+                  + Add rate
+                </button>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 mt-3">
+              {seasonalRates.map((rate, index) => (
+                <div
+                  key={index}
+                  className="grid grid-cols-2 sm:grid-cols-[1.2fr_1fr_1fr_.8fr_.8fr_auto] gap-1.5"
+                >
+                  {[
+                    ["label", "Label", "text"],
+                    ["start_date", "Starts", "date"],
+                    ["end_date", "Ends", "date"],
+                    ["booth_fee", "Booth $", "number"],
+                    ["truck_fee", "Truck $", "number"],
+                  ].map(([key, placeholder, type]) => (
+                    <input
+                      key={key}
+                      value={rate[key]}
+                      readOnly={!canWrite}
+                      onChange={(event) =>
+                        setSeasonalRates((rates) =>
+                          rates.map((item, position) =>
+                            position === index
+                              ? { ...item, [key]: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                      placeholder={placeholder}
+                      type={type}
+                      style={inp}
+                      className="px-2 py-1.5 rounded text-[11px] outline-none"
+                    />
+                  ))}
+                  {canWrite && (
+                    <button
+                      onClick={() =>
+                        setSeasonalRates((rates) =>
+                          rates.filter((_, position) => position !== index),
+                        )
+                      }
+                      style={{ color: C.danger }}
+                      className="p-1"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {!seasonalRates.length && (
+                <p style={{ color: C.faint }} className="text-[11px]">
+                  No seasonal overrides — standard market prices will apply.
+                </p>
+              )}
+            </div>
+          </section>
           {fields.map(([key, label, hint]) => (
             <div key={key}>
               <label
@@ -235,6 +414,10 @@ function MarketsTab({ canWrite, notify }) {
     booth_fee: "",
     truck_fee: "",
     app_fee: "",
+    venue_contact_name: "",
+    venue_contact_phone: "",
+    venue_contact_email: "",
+    map_url: "",
     payment_methods: [
       "stripe",
       "applepay",
@@ -242,11 +425,13 @@ function MarketsTab({ canWrite, notify }) {
       "paypal",
       "venmo",
       "zelle",
+      "cash",
     ],
   });
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null);
   const [detailId, setDetailId] = useState(null);
+  const [draggedId, setDraggedId] = useState(null);
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   const load = () =>
@@ -270,6 +455,10 @@ function MarketsTab({ canWrite, notify }) {
         booth_fee: num(form.booth_fee),
         truck_fee: num(form.truck_fee),
         app_fee: num(form.app_fee),
+        venue_contact_name: form.venue_contact_name.trim(),
+        venue_contact_phone: form.venue_contact_phone.trim(),
+        venue_contact_email: form.venue_contact_email.trim(),
+        map_url: form.map_url.trim(),
         payment_methods: form.payment_methods,
       });
       setForm({
@@ -279,6 +468,10 @@ function MarketsTab({ canWrite, notify }) {
         booth_fee: "",
         truck_fee: "",
         app_fee: "",
+        venue_contact_name: "",
+        venue_contact_phone: "",
+        venue_contact_email: "",
+        map_url: "",
         payment_methods: [
           "stripe",
           "applepay",
@@ -286,6 +479,7 @@ function MarketsTab({ canWrite, notify }) {
           "paypal",
           "venmo",
           "zelle",
+          "cash",
         ],
       });
       notify("Market saved");
@@ -321,6 +515,23 @@ function MarketsTab({ canWrite, notify }) {
       load();
     } catch (e) {
       notify(e.message, "err");
+    }
+  };
+  const reorder = async (targetId) => {
+    if (!draggedId || draggedId === targetId) return setDraggedId(null);
+    const from = rows.findIndex((market) => market.id === draggedId);
+    const to = rows.findIndex((market) => market.id === targetId);
+    if (from < 0 || to < 0) return setDraggedId(null);
+    const next = [...rows];
+    next.splice(to, 0, next.splice(from, 1)[0]);
+    setRows(next);
+    setDraggedId(null);
+    try {
+      await api.reorderMarkets(next.map((market) => market.id));
+      notify("Market order saved");
+    } catch (error) {
+      notify(error.message, "err");
+      load();
     }
   };
 
@@ -385,6 +596,38 @@ function MarketsTab({ canWrite, notify }) {
               className="px-3 py-2 rounded-lg text-[13px] outline-none"
             />
           </div>
+          <div className="grid sm:grid-cols-3 gap-2 mt-2">
+            <input
+              value={form.venue_contact_name}
+              onChange={(e) => set("venue_contact_name", e.target.value)}
+              placeholder="Venue contact name"
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[13px] outline-none"
+            />
+            <input
+              value={form.venue_contact_phone}
+              onChange={(e) => set("venue_contact_phone", e.target.value)}
+              placeholder="Venue contact phone"
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[13px] outline-none"
+            />
+            <input
+              value={form.venue_contact_email}
+              onChange={(e) => set("venue_contact_email", e.target.value)}
+              placeholder="Venue contact email"
+              type="email"
+              style={inp}
+              className="px-3 py-2 rounded-lg text-[13px] outline-none"
+            />
+            <input
+              value={form.map_url}
+              onChange={(e) => set("map_url", e.target.value)}
+              placeholder="Venue map link (https://...)"
+              type="url"
+              style={inp}
+              className="sm:col-span-3 px-3 py-2 rounded-lg text-[13px] outline-none"
+            />
+          </div>
           <div className="flex flex-wrap gap-2 mt-3">
             {[
               "stripe",
@@ -403,14 +646,17 @@ function MarketsTab({ canWrite, notify }) {
                 <input
                   type="checkbox"
                   checked={form.payment_methods.includes(method)}
+                  disabled={method === "cash"}
                   onChange={(event) =>
                     set(
                       "payment_methods",
                       event.target.checked
                         ? [...form.payment_methods, method]
-                        : form.payment_methods.filter(
-                            (item) => item !== method,
-                          ),
+                        : method === "cash"
+                          ? form.payment_methods
+                          : form.payment_methods.filter(
+                              (item) => item !== method,
+                            ),
                     )
                   }
                 />{" "}
@@ -442,6 +688,10 @@ function MarketsTab({ canWrite, notify }) {
         {rows.map((m) => (
           <div
             key={m.id}
+            draggable={canWrite && editing !== m.id}
+            onDragStart={() => setDraggedId(m.id)}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={() => reorder(m.id)}
             onClick={() => editing !== m.id && setDetailId(m.id)}
             role="button"
             tabIndex={0}
@@ -455,6 +705,14 @@ function MarketsTab({ canWrite, notify }) {
             }}
             className="rounded-xl p-3 flex items-center gap-3 hover:brightness-[.98]"
           >
+            {canWrite && (
+              <GripVertical
+                size={17}
+                style={{ color: C.faint }}
+                className="cursor-grab flex-shrink-0"
+                title="Drag to reorder markets"
+              />
+            )}
             <div
               style={{ background: C.pine }}
               className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"

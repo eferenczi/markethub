@@ -8,6 +8,7 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const { insertId } = require("../utils/insert-id");
 const notifications = require("../services/vendor-notifications");
+const { rateFor } = require("../services/market-rates");
 
 const router = express.Router();
 router.use(requireAuth, requireActiveSubscription);
@@ -24,14 +25,14 @@ const APPROVAL_STATUS = [
   "released",
 ];
 const PROCESSING_RATES = {
-  stripe: { percent: 2.9, fixed: 30 },
-  applepay: { percent: 2.9, fixed: 30 },
-  googlepay: { percent: 2.9, fixed: 30 },
-  paypal: { percent: 2.99, fixed: 49 },
-  venmo: { percent: 1.9, fixed: 10 },
+  stripe: { percent: 3.5, fixed: 0 },
+  applepay: { percent: 3.5, fixed: 0 },
+  googlepay: { percent: 3.5, fixed: 0 },
+  paypal: { percent: 3.5, fixed: 0 },
+  venmo: { percent: 0, fixed: 0 },
   zelle: { percent: 0, fixed: 0 },
   cash: { percent: 0, fixed: 0 },
-  other: { percent: 0, fixed: 0 },
+  other: { percent: 3.5, fixed: 0 },
 };
 
 const optionalId = (value) => (value === undefined ? undefined : Number(value));
@@ -331,11 +332,7 @@ router.post(
     const booth_type = req.body.booth_type || vendor.booth_type || "tent";
     const fee_cents =
       req.body.fee_cents === undefined
-        ? Math.round(
-            Number(
-              booth_type === "truck" ? market.truck_fee : market.booth_fee,
-            ) * 100,
-          )
+        ? Math.round(rateFor(market, booth_type, market_date.event_date) * 100)
         : req.body.fee_cents;
     const existing = await db("approvals")
       .where({ vendor_id: vendor.id, market_date_id: market_date.id })

@@ -24,6 +24,8 @@ const emptyStep = () => ({
     accent_color: "#1f5a4c",
     cta_label: "",
     cta_url: "",
+    logo_data: "",
+    image_data: "",
   },
 });
 const icon = { email: Mail, sms: MessageCircle, whatsapp: MessageCircle };
@@ -32,12 +34,14 @@ export default function CampaignsTab({ canWrite, notify }) {
   const [campaigns, setCampaigns] = useState(null);
   const [subscribers, setSubscribers] = useState(null);
   const [markets, setMarkets] = useState([]);
+  const [vendors, setVendors] = useState([]);
   const [publicLinks, setPublicLinks] = useState(null);
   const [busy, setBusy] = useState("");
   const [form, setForm] = useState({
     name: "",
     audience: "vendors",
     market_id: "",
+    audience_config: { category: "", vendor_ids: [] },
     steps: [emptyStep()],
   });
   const [subscriber, setSubscriber] = useState({
@@ -47,17 +51,24 @@ export default function CampaignsTab({ canWrite, notify }) {
   });
   const load = async () => {
     try {
-      const [campaignResult, subscriberResult, marketResult, linkResult] =
-        await Promise.all([
-          api.getCampaigns(),
-          api.getSubscribers(),
-          api.getMarkets(),
-          api.getCampaignPublicLinks(),
-        ]);
+      const [
+        campaignResult,
+        subscriberResult,
+        marketResult,
+        linkResult,
+        vendorResult,
+      ] = await Promise.all([
+        api.getCampaigns(),
+        api.getSubscribers(),
+        api.getMarkets(),
+        api.getCampaignPublicLinks(),
+        api.getVendors(),
+      ]);
       setCampaigns(campaignResult.campaigns);
       setSubscribers(subscriberResult.subscribers);
       setMarkets(marketResult.markets.filter((market) => !market.archived));
       setPublicLinks(linkResult);
+      setVendors(vendorResult.vendors);
     } catch (error) {
       notify(error.message, "err");
     }
@@ -90,6 +101,7 @@ export default function CampaignsTab({ canWrite, notify }) {
         name: "",
         audience: "vendors",
         market_id: "",
+        audience_config: { category: "", vendor_ids: [] },
         steps: [emptyStep()],
       });
       notify("Campaign saved as a draft");
@@ -152,6 +164,23 @@ export default function CampaignsTab({ canWrite, notify }) {
       notify(`Copy this link: ${url}`, "err");
     }
   };
+  const setImage = (index, field, file) => {
+    if (!file) return;
+    if (
+      !/^image\/(jpeg|png|webp)$/.test(file.type) ||
+      file.size > 2 * 1024 * 1024
+    )
+      return notify("Use a JPG, PNG, or WebP image smaller than 2 MB", "err");
+    const reader = new FileReader();
+    reader.onload = () =>
+      patchStep(index, {
+        design: { ...form.steps[index].design, [field]: reader.result },
+      });
+    reader.readAsDataURL(file);
+  };
+  const categories = [
+    ...new Set(vendors.map((vendor) => vendor.category).filter(Boolean)),
+  ].sort();
   if (!campaigns || !subscribers)
     return (
       <div style={{ color: C.sub }} className="py-8">
@@ -216,6 +245,8 @@ export default function CampaignsTab({ canWrite, notify }) {
               </option>
               <option value="customers">Newsletter customers</option>
               <option value="all">Vendors + customers</option>
+              <option value="category">Vendors in a category</option>
+              <option value="specific_vendor">Specific vendor/contact</option>
             </select>
             <select
               value={form.market_id}
@@ -240,6 +271,56 @@ export default function CampaignsTab({ canWrite, notify }) {
               ))}
             </select>
           </div>
+          {form.audience === "category" && (
+            <select
+              value={form.audience_config.category}
+              onChange={(event) =>
+                setForm((previous) => ({
+                  ...previous,
+                  audience_config: {
+                    ...previous.audience_config,
+                    category: event.target.value,
+                  },
+                }))
+              }
+              style={inp}
+              className="mt-2 w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
+            >
+              <option value="">Choose vendor category</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          )}
+          {form.audience === "specific_vendor" && (
+            <select
+              multiple
+              value={form.audience_config.vendor_ids.map(String)}
+              onChange={(event) =>
+                setForm((previous) => ({
+                  ...previous,
+                  audience_config: {
+                    ...previous.audience_config,
+                    vendor_ids: Array.from(
+                      event.target.selectedOptions,
+                      (option) => Number(option.value),
+                    ),
+                  },
+                }))
+              }
+              style={inp}
+              className="mt-2 w-full min-h-28 px-3 py-2.5 rounded-lg text-[13px] outline-none"
+            >
+              {vendors.map((vendor) => (
+                <option key={vendor.id} value={vendor.id}>
+                  {vendor.business_name}
+                  {vendor.contact_name ? ` — ${vendor.contact_name}` : ""}
+                </option>
+              ))}
+            </select>
+          )}
           <div className="flex flex-col gap-3 mt-4">
             {form.steps.map((step, index) => {
               const Icon = icon[step.channel];
@@ -332,6 +413,52 @@ export default function CampaignsTab({ canWrite, notify }) {
                           />
                         </label>
                       </div>
+                      <div className="grid sm:grid-cols-2 gap-2 mt-2">
+                        <label
+                          style={{
+                            background: C.card,
+                            border: `1px solid ${C.line}`,
+                            color: C.sub,
+                          }}
+                          className="px-3 py-2 rounded-lg text-[11.5px] font-semibold cursor-pointer"
+                        >
+                          Upload newsletter logo
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={(event) =>
+                              setImage(
+                                index,
+                                "logo_data",
+                                event.target.files?.[0],
+                              )
+                            }
+                          />
+                        </label>
+                        <label
+                          style={{
+                            background: C.card,
+                            border: `1px solid ${C.line}`,
+                            color: C.sub,
+                          }}
+                          className="px-3 py-2 rounded-lg text-[11.5px] font-semibold cursor-pointer"
+                        >
+                          Upload body image
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={(event) =>
+                              setImage(
+                                index,
+                                "image_data",
+                                event.target.files?.[0],
+                              )
+                            }
+                          />
+                        </label>
+                      </div>
                     </>
                   )}
                   <textarea
@@ -401,6 +528,13 @@ export default function CampaignsTab({ canWrite, notify }) {
                             }}
                           />
                           <div className="p-4">
+                            {step.design?.logo_data && (
+                              <img
+                                src={step.design.logo_data}
+                                alt="Newsletter logo"
+                                className="max-h-12 max-w-44 object-contain mb-3"
+                              />
+                            )}
                             <p
                               style={{ fontFamily: FD }}
                               className="text-[17px] font-semibold"
@@ -409,6 +543,13 @@ export default function CampaignsTab({ canWrite, notify }) {
                                 step.subject ||
                                 "Your newsletter headline"}
                             </p>
+                            {step.design?.image_data && (
+                              <img
+                                src={step.design.image_data}
+                                alt="Newsletter body"
+                                className="w-full max-h-48 object-cover rounded-lg mt-3"
+                              />
+                            )}
                             <p
                               style={{ color: C.sub, whiteSpace: "pre-wrap" }}
                               className="mt-2 text-[12px] leading-relaxed"
