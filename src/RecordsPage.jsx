@@ -1124,6 +1124,42 @@ function VendorsTab({ canWrite, notify }) {
 }
 
 /* ---------------- Customers ---------------- */
+function MarketInterestChecks({ markets, value, onChange }) {
+  const ids = value || [];
+  const toggle = (marketId) =>
+    onChange(
+      ids.includes(marketId)
+        ? ids.filter((id) => id !== marketId)
+        : [...ids, marketId],
+    );
+  return (
+    <div
+      style={{ background: C.paper2, border: `1px solid ${C.line}` }}
+      className="mt-1 grid sm:grid-cols-2 gap-1.5 rounded-lg p-2"
+    >
+      {markets.map((market) => (
+        <label
+          key={market.id}
+          style={{ background: C.card, color: C.sub }}
+          className="flex items-center gap-2 rounded-md px-2.5 py-2 text-[11.5px] font-semibold cursor-pointer"
+        >
+          <input
+            type="checkbox"
+            checked={ids.includes(market.id)}
+            onChange={() => toggle(market.id)}
+          />
+          {market.name}
+        </label>
+      ))}
+      {markets.length === 0 && (
+        <p style={{ color: C.faint }} className="px-1 text-[11px]">
+          Add a market first to set customer interests.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function CustomersTab({ canWrite, notify }) {
   const [rows, setRows] = useState(null);
   const [markets, setMarkets] = useState([]);
@@ -1254,31 +1290,16 @@ function CustomersTab({ canWrite, notify }) {
             >
               Interested markets
             </span>
-            <select
-              multiple
-              value={form.interested_market_ids.map(String)}
-              onChange={(event) =>
+            <MarketInterestChecks
+              markets={markets}
+              value={form.interested_market_ids}
+              onChange={(ids) =>
                 setForm((current) => ({
                   ...current,
-                  interested_market_ids: Array.from(
-                    event.target.selectedOptions,
-                    (option) => Number(option.value),
-                  ),
+                  interested_market_ids: ids,
                 }))
               }
-              style={inp}
-              className="mt-1 w-full min-h-24 px-3 py-2 rounded-lg text-[12px] outline-none"
-            >
-              {markets.map((market) => (
-                <option key={market.id} value={market.id}>
-                  {market.name}
-                </option>
-              ))}
-            </select>
-            <span style={{ color: C.sub }} className="block mt-1 text-[10.5px]">
-              Hold Command (Mac) or Ctrl (Windows) to choose more than one
-              market.
-            </span>
+            />
           </label>
           <button
             onClick={add}
@@ -1329,26 +1350,22 @@ function CustomersTab({ canWrite, notify }) {
                   style={inp}
                   className="px-2 py-1.5 rounded text-[12px] outline-none"
                 />
-                <select
-                  multiple
-                  defaultValue={(customer.interested_market_ids || []).map(
-                    String,
-                  )}
-                  onChange={(event) =>
-                    (customer.interested_market_ids = Array.from(
-                      event.target.selectedOptions,
-                      (option) => Number(option.value),
-                    ))
-                  }
-                  style={inp}
-                  className="sm:col-span-2 min-h-20 px-2 py-1.5 rounded text-[11px] outline-none"
-                >
-                  {markets.map((market) => (
-                    <option key={market.id} value={market.id}>
-                      {market.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="sm:col-span-2">
+                  <MarketInterestChecks
+                    markets={markets}
+                    value={customer.interested_market_ids || []}
+                    onChange={(ids) => {
+                      customer.interested_market_ids = ids;
+                      setRows((current) =>
+                        current.map((item) =>
+                          item.id === customer.id
+                            ? { ...item, interested_market_ids: ids }
+                            : item,
+                        ),
+                      );
+                    }}
+                  />
+                </div>
                 <input
                   defaultValue={customer.email || ""}
                   onChange={(event) => (customer.email = event.target.value)}
