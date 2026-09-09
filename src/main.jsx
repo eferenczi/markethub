@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import { Loader2 } from "lucide-react";
 import "./index.css";
-import Console from "./MarketHub_ManagerWeb.jsx";
-import MobileApp from "./MarketHub.jsx";
 import {
   AuthProvider,
   useAuth,
@@ -193,10 +191,6 @@ function Root() {
   if (view === "records")
     return <RecordsPage user={user} onClose={() => setView(null)} />;
 
-  // #/app -> mobile app, otherwise the manager console.
-  const isApp = hash.toLowerCase().startsWith("app");
-  const AppView = isApp ? MobileApp : null;
-
   return (
     <div>
       <AccountBar
@@ -207,13 +201,10 @@ function Root() {
         onBilling={() => setView("billing")}
         onLogout={logout}
       />
-      {AppView ? <AppView /> : <RecordsPage user={user} />}
+      <RecordsPage user={user} />
     </div>
   );
 }
-
-// Switching the #/app hash reloads so each demo app starts clean.
-window.addEventListener("hashchange", () => window.location.reload());
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
