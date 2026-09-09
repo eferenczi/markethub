@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import { Loader2 } from "lucide-react";
 import "./index.css";
+import MobileOrganizer from "./MobileOrganizer.jsx";
 import {
   AuthProvider,
   useAuth,
@@ -159,7 +160,9 @@ function Root() {
   // Private organizer pilot: direct access to the shared workspace. The
   // account/billing chrome and all sign-in routes stay out of the way until
   // authentication is deliberately re-enabled for the public launch.
-  if (pilotMode) return <RecordsPage user={user} />;
+  const useMobileConsole = isNative() || hash.toLowerCase().startsWith("app");
+  if (pilotMode)
+    return useMobileConsole ? <MobileOrganizer user={user} /> : <RecordsPage user={user} />;
   if (billing === undefined) return <Splash />;
 
   // Explicit billing view (from the account bar).
@@ -201,7 +204,7 @@ function Root() {
         onBilling={() => setView("billing")}
         onLogout={logout}
       />
-      <RecordsPage user={user} />
+      {useMobileConsole ? <MobileOrganizer user={user} /> : <RecordsPage user={user} />}
     </div>
   );
 }
